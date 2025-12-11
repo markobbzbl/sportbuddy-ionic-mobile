@@ -229,4 +229,24 @@ ion-spinner {
   display: block;
 }
 
+.location-info {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background-color: var(--ion-color-light);
+  border-radius: 8px;
+
+  h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0.5rem 0;
+    color: var(--ion-color-dark);
+  }
+
+}
+
 

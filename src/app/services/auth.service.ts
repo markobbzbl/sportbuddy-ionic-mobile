@@ -75,7 +75,7 @@ export class AuthService {
       try {
         // Wait for trigger to execute
         await new Promise(resolve => setTimeout(resolve, 1000));
-        await this.loadProfile(data.user.id);
+      await this.loadProfile(data.user.id);
       } catch (profileError: any) {
         console.error('Error loading profile after signup:', profileError);
         // Don't throw - user is created successfully

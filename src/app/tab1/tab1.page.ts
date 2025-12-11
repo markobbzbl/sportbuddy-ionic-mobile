@@ -34,6 +34,7 @@ import {
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { add, location, time, person, create, trash, close, cloudOffline, people, checkmarkCircle, addCircleOutline, closeCircle, filter, closeCircleOutline } from 'ionicons/icons';
+import { Geolocation } from '@capacitor/geolocation';
 import { SupabaseService, TrainingOffer, Profile, Participant } from '../services/supabase.service';
 import { AuthService } from '../services/auth.service';
 import { StorageService } from '../services/storage.service';
@@ -103,6 +104,13 @@ export class Tab1Page implements OnInit, OnDestroy {
   nameFilter: string = '';
   private subscriptions: Subscription[] = [];
   private successMessageTimeout?: any;
+  
+  // Geolocation properties
+  mapModalOpen = false;
+  selectedLatitude: number | null = null;
+  selectedLongitude: number | null = null;
+  selectedAddress: string = '';
+  isGettingLocation = false;
 
   sportTypes = [
     'Fußball',
@@ -816,4 +824,106 @@ export class Tab1Page implements OnInit, OnDestroy {
       this.isLoading = false;
     }
   }
+
+  async useMyLocation() {
+    this.isGettingLocation = true;
+    this.errorMessage = '';
+    
+    try {
+      // Request permissions
+      const permissionStatus = await Geolocation.requestPermissions();
+      if (permissionStatus.location !== 'granted') {
+        this.errorMessage = 'Standortberechtigung wurde nicht erteilt. Bitte in den Einstellungen aktivieren.';
+        this.isGettingLocation = false;
+        return;
+      }
+
+      // Get current position
+      const position = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 10000
+      });
+
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      // Reverse geocode to get address
+      const address = await this.reverseGeocode(lat, lng);
+      
+      // Store coordinates and address
+      this.selectedLatitude = lat;
+      this.selectedLongitude = lng;
+      this.selectedAddress = address;
+      
+      // Open map modal for confirmation
+      this.mapModalOpen = true;
+    } catch (error: any) {
+      console.error('Error getting location:', error);
+      this.errorMessage = 'Fehler beim Abrufen des Standorts: ' + (error.message || 'Unbekannter Fehler');
+    } finally {
+      this.isGettingLocation = false;
+    }
+  }
+
+  async reverseGeocode(lat: number, lng: number): Promise<string> {
+    try {
+      // Use OpenStreetMap Nominatim API (free, no API key required)
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Sportbuddy App'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Reverse geocoding failed');
+      }
+      
+      const data = await response.json();
+      
+      if (data.address) {
+        const addr = data.address;
+        // Build address string from components
+        const parts: string[] = [];
+        
+        if (addr.road) parts.push(addr.road);
+        if (addr.house_number) parts.push(addr.house_number);
+        if (addr.suburb || addr.neighbourhood) parts.push(addr.suburb || addr.neighbourhood);
+        if (addr.city || addr.town || addr.village) parts.push(addr.city || addr.town || addr.village);
+        if (addr.postcode) parts.push(addr.postcode);
+        
+        if (parts.length > 0) {
+          return parts.join(', ');
+        }
+      }
+      
+      // Fallback: return coordinates if address not found
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+      // Fallback: return coordinates
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+  }
+
+  confirmLocation() {
+    if (this.selectedAddress) {
+      this.offerForm.patchValue({ location: this.selectedAddress });
+      this.mapModalOpen = false;
+      // Clear selected location data
+      this.selectedLatitude = null;
+      this.selectedLongitude = null;
+      this.selectedAddress = '';
+    }
+  }
+
+  closeMapModal() {
+    this.mapModalOpen = false;
+    // Clear selected location data
+    this.selectedLatitude = null;
+    this.selectedLongitude = null;
+    this.selectedAddress = '';
+  }
+
 }
