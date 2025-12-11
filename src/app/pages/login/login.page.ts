@@ -126,7 +126,17 @@ export class LoginPage implements OnInit {
       await this.authService.signUp(email, password, firstName, lastName);
       this.router.navigate(['/tabs/tab1']);
     } catch (error: any) {
-      this.errorMessage = error.message || 'Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.';
+      console.error('Registration error:', error);
+      // Show more detailed error message
+      if (error.message) {
+        this.errorMessage = error.message;
+      } else if (error.error_description) {
+        this.errorMessage = error.error_description;
+      } else if (typeof error === 'string') {
+        this.errorMessage = error;
+      } else {
+        this.errorMessage = 'Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.';
+      }
     } finally {
       this.isLoading = false;
     }

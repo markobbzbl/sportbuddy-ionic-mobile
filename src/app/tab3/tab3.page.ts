@@ -259,10 +259,21 @@ export class Tab3Page implements OnInit, OnDestroy {
           if (error) throw error;
 
           if (data?.publicUrl) {
-            this.avatarUrl = data.publicUrl;
-            const { error: updateError } = await this.supabase.updateProfile(user.id, { avatar_url: data.publicUrl });
+            // Update profile with new avatar URL
+            const { data: updatedProfile, error: updateError } = await this.supabase.updateProfile(user.id, { avatar_url: data.publicUrl });
             if (updateError) throw updateError;
+            
+            // Update local state immediately
+            if (updatedProfile) {
+              this.profile = updatedProfile;
+              this.avatarUrl = updatedProfile.avatar_url || data.publicUrl;
+              await this.storage.set('offline_profile', updatedProfile);
+            } else {
+              this.avatarUrl = data.publicUrl;
+            }
+            
             this.setSuccessMessage('Profilbild erfolgreich aktualisiert');
+            // Reload profile to ensure everything is in sync
             await this.loadProfile();
           }
         } catch (error: any) {

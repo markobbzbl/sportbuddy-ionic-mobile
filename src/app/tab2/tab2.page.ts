@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
   IonHeader,
@@ -11,16 +11,29 @@ import {
   IonCardContent,
   IonCardHeader,
   IonCardTitle,
-  IonAvatar,
+  IonRefresher,
+  IonRefresherContent,
   IonSpinner,
   IonText,
-  IonRefresher,
-  IonRefresherContent
+  IonModal,
+  IonInput,
+  IonTextarea,
+  IonSelect,
+  IonSelectOption,
+  IonButtons,
+  IonBadge,
+  IonList,
+  IonListHeader,
+  IonItem,
+  IonLabel,
+  IonAvatar
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { location, navigate, person } from 'ionicons/icons';
-import { SupabaseService, TrainingOffer, Profile } from '../services/supabase.service';
-import { Geolocation } from '@capacitor/geolocation';
+import { create, trash, time, people, checkmarkCircle, close } from 'ionicons/icons';
+import { SupabaseService, TrainingOffer, Participant } from '../services/supabase.service';
+import { AuthService } from '../services/auth.service';
+import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-tab2',
@@ -28,6 +41,8 @@ import { Geolocation } from '@capacitor/geolocation';
   styleUrls: ['tab2.page.scss'],
   imports: [
     CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
     IonHeader,
     IonToolbar,
     IonTitle,
@@ -38,57 +53,137 @@ import { Geolocation } from '@capacitor/geolocation';
     IonCardContent,
     IonCardHeader,
     IonCardTitle,
-    IonAvatar,
+    IonRefresher,
+    IonRefresherContent,
     IonSpinner,
     IonText,
-    IonRefresher,
-    IonRefresherContent
+    IonModal,
+    IonInput,
+    IonTextarea,
+    IonSelect,
+    IonSelectOption,
+    IonButtons,
+    IonBadge,
+    IonList,
+    IonListHeader,
+    IonItem,
+    IonLabel,
+    IonAvatar
   ]
 })
-export class Tab2Page implements OnInit {
-  @ViewChild('mapContainer', { static: false }) mapContainer!: ElementRef;
-  
-  nearbyOffers: TrainingOffer[] = [];
+export class Tab2Page implements OnInit, OnDestroy {
+  myOffers: TrainingOffer[] = [];
   isLoading = false;
-  currentLocation: { lat: number; lng: number } | null = null;
+  isModalOpen = false;
+  isEditMode = false;
+  editingOffer: TrainingOffer | null = null;
+  offerForm: FormGroup;
   errorMessage = '';
-  map: any = null;
+  successMessage = '';
+  participantsModalOpen = false;
+  selectedOfferParticipants: Participant[] = [];
+  selectedOffer: TrainingOffer | null = null;
+  loadingParticipants = false;
+  private subscriptions: Subscription[] = [];
+  private successMessageTimeout?: any;
 
-  constructor(private supabase: SupabaseService) {
-    addIcons({ location, navigate, person });
+  sportTypes = [
+    'Fußball',
+    'Basketball',
+    'Tennis',
+    'Joggen',
+    'Fahrrad fahren',
+    'Schwimmen',
+    'Volleyball',
+    'Badminton',
+    'Tischtennis',
+    'Fitness',
+    'Yoga',
+    'Andere'
+  ];
+
+  constructor(
+    private supabase: SupabaseService,
+    private authService: AuthService,
+    private fb: FormBuilder
+  ) {
+    addIcons({ create, trash, time, people, checkmarkCircle, close });
+    
+    this.offerForm = this.fb.group({
+      sport_type: ['', Validators.required],
+      location: ['', Validators.required],
+      date_time: ['', Validators.required],
+      description: ['']
+    });
   }
 
   async ngOnInit() {
-    await this.loadCurrentLocation();
-    await this.loadNearbyOffers();
+    await this.loadMyOffers();
   }
 
-  async loadCurrentLocation() {
+  ngOnDestroy() {
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+    if (this.successMessageTimeout) {
+      clearTimeout(this.successMessageTimeout);
+    }
+  }
+
+  async loadMyOffers() {
+    this.isLoading = true;
+    this.errorMessage = '';
+
     try {
-      const position = await Geolocation.getCurrentPosition({
-        enableHighAccuracy: true,
-        timeout: 10000
-      });
-      
-      this.currentLocation = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-      };
+      const user = await this.authService.getCurrentUser();
+      if (!user) {
+        this.errorMessage = 'Nicht angemeldet';
+        this.isLoading = false;
+        return;
+      }
+
+      const { data, error } = await this.supabase.getTrainingOffers();
+      if (error) throw error;
+
+      if (data) {
+        // Filter to show only current user's offers
+        this.myOffers = data.filter(offer => offer.user_id === user.id);
+        // Sort by date (upcoming first)
+        this.myOffers.sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime());
+      }
     } catch (error: any) {
-      console.error('Error getting location:', error);
-      // Default to Berlin if geolocation fails
-      this.currentLocation = { lat: 52.5200, lng: 13.4050 };
-      this.errorMessage = 'Standort konnte nicht ermittelt werden. Zeige Standardposition (Berlin).';
+      console.error('Error loading my offers:', error);
+      this.errorMessage = 'Fehler beim Laden Ihrer Angebote';
+    } finally {
+      this.isLoading = false;
     }
   }
 
-  async loadNearbyOffers() {
-    if (!this.currentLocation) {
-      await this.loadCurrentLocation();
-    }
+  async handleRefresh(event: any) {
+    await this.loadMyOffers();
+    event.target.complete();
+  }
 
-    if (!this.currentLocation) {
-      this.errorMessage = 'Standort erforderlich, um nahegelegene Angebote anzuzeigen.';
+  openEditModal(offer: TrainingOffer) {
+    this.isEditMode = true;
+    this.editingOffer = offer;
+    this.offerForm.patchValue({
+      sport_type: offer.sport_type,
+      location: offer.location,
+      date_time: new Date(offer.date_time).toISOString().slice(0, 16),
+      description: offer.description || ''
+    });
+    this.isModalOpen = true;
+  }
+
+  closeModal() {
+    this.isModalOpen = false;
+    this.isEditMode = false;
+    this.editingOffer = null;
+    this.offerForm.reset();
+  }
+
+  async onSubmitOffer() {
+    if (this.offerForm.invalid) {
+      this.errorMessage = 'Bitte füllen Sie alle Pflichtfelder aus';
       return;
     }
 
@@ -96,78 +191,149 @@ export class Tab2Page implements OnInit {
     this.errorMessage = '';
 
     try {
-      const { data, error } = await this.supabase.getNearbyTrainingOffers(
-        this.currentLocation.lat,
-        this.currentLocation.lng,
-        10 // 10km radius
-      );
-
-      if (error) throw error;
-
-      if (data) {
-        this.nearbyOffers = data;
+      const user = await this.authService.getCurrentUser();
+      if (!user) {
+        this.errorMessage = 'Nicht angemeldet';
+        this.isLoading = false;
+        return;
       }
+
+      const formValue = this.offerForm.value;
+
+      if (this.isEditMode && this.editingOffer) {
+        // Update existing offer
+        const { error } = await this.supabase.updateTrainingOffer(
+          this.editingOffer.id,
+          {
+            sport_type: formValue.sport_type,
+            location: formValue.location,
+            date_time: formValue.date_time,
+            description: formValue.description || null
+          }
+        );
+
+        if (error) throw error;
+        this.setSuccessMessage('Trainingsangebot erfolgreich aktualisiert');
+      }
+
+      this.closeModal();
+      await this.loadMyOffers();
     } catch (error: any) {
-      console.error('Error loading nearby offers:', error);
-      this.errorMessage = 'Fehler beim Laden der nahegelegenen Angebote';
+      console.error('Error saving offer:', error);
+      this.errorMessage = error.message || 'Fehler beim Speichern des Angebots';
     } finally {
       this.isLoading = false;
     }
   }
 
-  async handleRefresh(event: any) {
-    await this.loadCurrentLocation();
-    await this.loadNearbyOffers();
-    event.target.complete();
+  async deleteOffer(offer: TrainingOffer) {
+    if (!confirm('Möchten Sie dieses Trainingsangebot wirklich löschen?')) {
+      return;
+    }
+
+    this.isLoading = true;
+    this.errorMessage = '';
+
+    try {
+      const { error } = await this.supabase.deleteTrainingOffer(offer.id);
+      if (error) throw error;
+
+      this.setSuccessMessage('Trainingsangebot erfolgreich gelöscht');
+      await this.loadMyOffers();
+    } catch (error: any) {
+      console.error('Error deleting offer:', error);
+      this.errorMessage = error.message || 'Fehler beim Löschen des Angebots';
+    } finally {
+      this.isLoading = false;
+    }
   }
 
-  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // Earth's radius in km
-    const dLat = this.deg2rad(lat2 - lat1);
-    const dLon = this.deg2rad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return Math.round(R * c * 10) / 10; // Round to 1 decimal place
+  async viewParticipants(offer: TrainingOffer) {
+    this.selectedOffer = offer;
+    this.participantsModalOpen = true;
+    this.loadingParticipants = true;
+
+    try {
+      const { data, error } = await this.supabase.getTrainingOfferParticipants(offer.id, 10);
+      if (error) throw error;
+
+      // Transform data to match Participant interface (profiles is returned as array from Supabase)
+      this.selectedOfferParticipants = (data || []).map((p: any) => ({
+        id: p.id,
+        user_id: p.user_id,
+        created_at: p.created_at,
+        profiles: Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
+      }));
+    } catch (error: any) {
+      console.error('Error loading participants:', error);
+      this.errorMessage = 'Fehler beim Laden der Teilnehmer';
+    } finally {
+      this.loadingParticipants = false;
+    }
   }
 
-  private deg2rad(deg: number): number {
-    return deg * (Math.PI / 180);
+  closeParticipantsModal() {
+    this.participantsModalOpen = false;
+    this.selectedOffer = null;
+    this.selectedOfferParticipants = [];
   }
 
-  getDistance(offer: TrainingOffer): number {
-    if (!this.currentLocation || !offer.latitude || !offer.longitude) return 0;
-    return this.calculateDistance(
-      this.currentLocation.lat,
-      this.currentLocation.lng,
-      offer.latitude,
-      offer.longitude
-    );
+  async removeParticipant(participant: Participant) {
+    if (!this.selectedOffer) return;
+
+    this.isLoading = true;
+    this.errorMessage = '';
+
+    try {
+      const { error } = await this.supabase.removeParticipant(
+        this.selectedOffer.id,
+        participant.user_id
+      );
+
+      if (error) throw error;
+
+      this.setSuccessMessage('Teilnehmer entfernt');
+      await this.viewParticipants(this.selectedOffer);
+    } catch (error: any) {
+      console.error('Error removing participant:', error);
+      this.errorMessage = error.message || 'Fehler beim Entfernen des Teilnehmers';
+    } finally {
+      this.isLoading = false;
+    }
   }
 
-  async openInMaps(offer: TrainingOffer) {
-    if (!offer.latitude || !offer.longitude) return;
-    const url = `https://www.google.com/maps/search/?api=1&query=${offer.latitude},${offer.longitude}`;
-    window.open(url, '_blank');
+  getParticipantName(participant: Participant): string {
+    if (!participant.profiles) return 'Unbekannt';
+    const firstName = participant.profiles.first_name || '';
+    const lastName = participant.profiles.last_name || '';
+    return `${firstName} ${lastName}`.trim() || 'Unbekannt';
   }
 
   formatDate(dateString: string): string {
     const date = new Date(dateString);
+    const now = new Date();
+    const isPast = date < now;
+
     return date.toLocaleDateString('de-DE', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    });
+    }) + (isPast ? ' (Vergangen)' : '');
   }
 
-  getProfileName(profile?: Profile): string {
-    if (!profile) return 'Unbekannt';
-    const firstName = profile.first_name || '';
-    const lastName = profile.last_name || '';
-    return `${firstName} ${lastName}`.trim() || 'Unbekannt';
+  isUpcoming(offer: TrainingOffer): boolean {
+    return new Date(offer.date_time) > new Date();
+  }
+
+  setSuccessMessage(message: string) {
+    this.successMessage = message;
+    if (this.successMessageTimeout) {
+      clearTimeout(this.successMessageTimeout);
+    }
+    this.successMessageTimeout = setTimeout(() => {
+      this.successMessage = '';
+    }, 3000);
   }
 }

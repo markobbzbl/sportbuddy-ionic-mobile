@@ -15,34 +15,75 @@
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
 
-  <!-- Messages at the top -->
-  <div class="messages-container">
-    <ion-text color="danger" *ngIf="errorMessage" class="message-banner error-banner">
-      <p class="ion-padding">{{ errorMessage }}</p>
-    </ion-text>
+  <!-- Messages and Filter Container (sticky together) -->
+  <div class="sticky-header-container">
+    <!-- Messages at the top -->
+    <div class="messages-container">
+      <ion-text color="danger" *ngIf="errorMessage" class="message-banner error-banner">
+        <p class="ion-padding">{{ errorMessage }}</p>
+      </ion-text>
 
-    <ion-text color="success" *ngIf="successMessage" class="message-banner success-banner">
-      <p class="ion-padding">{{ successMessage }}</p>
-    </ion-text>
+      <ion-text color="success" *ngIf="successMessage" class="message-banner success-banner">
+        <p class="ion-padding">{{ successMessage }}</p>
+      </ion-text>
 
-    <ion-text *ngIf="!isOnline" color="warning" class="message-banner offline-banner">
-      <p style="margin: 0; font-weight: 500;">
-        <ion-icon name="cloud-offline" style="vertical-align: middle; margin-right: 4px;"></ion-icon>
-        Offline-Modus: Erstellte Angebote werden synchronisiert, sobald Sie online sind.
-        <span *ngIf="queueCount > 0"> ({{ queueCount }} ausstehend)</span>
-      </p>
-    </ion-text>
+      <ion-text *ngIf="!isOnline" color="warning" class="message-banner offline-banner">
+        <p style="margin: 0; font-weight: 500;">
+          <ion-icon name="cloud-offline" style="vertical-align: middle; margin-right: 4px;"></ion-icon>
+          Offline-Modus: Erstellte Angebote werden synchronisiert, sobald Sie online sind.
+          <span *ngIf="queueCount > 0"> ({{ queueCount }} ausstehend)</span>
+        </p>
+      </ion-text>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-container">
+    <ion-searchbar
+      [(ngModel)]="nameFilter"
+      (ionInput)="onNameFilterChange($event)"
+      placeholder="Nach Name suchen..."
+      debounce="300"
+      class="filter-searchbar"
+    ></ion-searchbar>
+    
+      <ion-select
+        [(ngModel)]="sportTypeFilter"
+        (ionChange)="onSportFilterChange($event)"
+        placeholder="Alle Sportarten"
+        interface="popover"
+        class="filter-select"
+      >
+        <ion-select-option value="">Alle Sportarten</ion-select-option>
+        <ion-select-option *ngFor="let sport of sportTypes" [value]="sport">{{ sport }}</ion-select-option>
+      </ion-select>
+      
+      <ion-button
+        *ngIf="hasActiveFilters()"
+        fill="clear"
+        size="small"
+        (click)="clearFilters()"
+        class="clear-filter-btn"
+        aria-label="Filter zurücksetzen"
+      >
+        <ion-icon name="close-circle-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+  </div>
   </div>
 
   <div class="content-container">
     <ion-spinner *ngIf="isLoading && trainingOffers.length === 0" name="crescent"></ion-spinner>
+
+    <div *ngIf="filteredOffers.length === 0 && !isLoading && trainingOffers.length > 0" class="empty-state">
+      <p>Keine Angebote gefunden.</p>
+      <p *ngIf="hasActiveFilters()">Versuchen Sie andere Filterkriterien.</p>
+    </div>
 
     <div *ngIf="trainingOffers.length === 0 && !isLoading" class="empty-state">
       <p>Noch keine Trainingsangebote vorhanden.</p>
       <p>Erstelle das erste Angebot!</p>
     </div>
 
-    <ion-card *ngFor="let offer of trainingOffers" class="offer-card">
+    <ion-card *ngFor="let offer of filteredOffers" class="offer-card">
       <ion-card-header>
         <div class="card-header-content">
           <div>

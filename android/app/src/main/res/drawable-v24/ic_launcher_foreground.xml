@@ -4,31 +4,76 @@
     android:height="108dp"
     android:viewportHeight="108"
     android:viewportWidth="108">
+    
+    <!-- Background circle with gradient -->
     <path
-        android:fillType="evenOdd"
-        android:pathData="M32,64C32,64 38.39,52.99 44.13,50.95C51.37,48.37 70.14,49.57 70.14,49.57L108.26,87.69L108,109.01L75.97,107.97L32,64Z"
+        android:pathData="M54,4C81.614,4 104,26.386 104,54C104,81.614 81.614,104 54,104C26.386,104 4,81.614 4,54C4,26.386 26.386,4 54,4Z"
         android:strokeColor="#00000000"
         android:strokeWidth="1">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:endX="78.5885"
-                android:endY="90.9159"
-                android:startX="48.7653"
-                android:startY="61.0927"
+                android:endX="104"
+                android:endY="104"
+                android:startX="4"
+                android:startY="4"
                 android:type="linear">
                 <item
-                    android:color="#44000000"
+                    android:color="#4CAF50"
                     android:offset="0.0" />
                 <item
-                    android:color="#00000000"
+                    android:color="#2196F3"
                     android:offset="1.0" />
             </gradient>
         </aapt:attr>
     </path>
+    
+    <!-- Person 1 (left) - Head -->
     <path
         android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M66.94,46.02L66.94,46.02C72.44,50.07 76,56.61 76,64L32,64C32,56.61 35.56,50.11 40.98,46.06L36.18,41.19C35.45,40.45 35.45,39.3 36.18,38.56C36.91,37.81 38.05,37.81 38.78,38.56L44.25,44.05C47.18,42.57 50.48,41.71 54,41.71C57.48,41.71 60.78,42.57 63.68,44.05L69.11,38.56C69.84,37.81 70.98,37.81 71.71,38.56C72.44,39.3 72.44,40.45 71.71,41.19L66.94,46.02ZM62.94,56.92C64.08,56.92 65,56.01 65,54.88C65,53.76 64.08,52.85 62.94,52.85C61.8,52.85 60.88,53.76 60.88,54.88C60.88,56.01 61.8,56.92 62.94,56.92ZM45.06,56.92C46.2,56.92 47.13,56.01 47.13,54.88C47.13,53.76 46.2,52.85 45.06,52.85C43.92,52.85 43,53.76 43,54.88C43,56.01 43.92,56.92 45.06,56.92Z"
-        android:strokeColor="#00000000"
-        android:strokeWidth="1" />
+        android:pathData="M32,28C35.314,28 38,30.686 38,34C38,37.314 35.314,40 32,40C28.686,40 26,37.314 26,34C26,30.686 28.686,28 32,28Z"/>
+    
+    <!-- Person 1 - Body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,42C30,42 30,38 32,38C34,38 34,42 34,42L34,68C34,70 32,70 32,70C30,70 30,68 30,68Z"/>
+    
+    <!-- Person 1 - Left arm -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20,31Q23,27 27,29L29,33Q28,34 25,33Z"/>
+    
+    <!-- Person 1 - Right arm -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,31Q41,27 37,29L35,33Q36,34 39,33Z"/>
+    
+    <!-- Person 2 (right) - Head -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M80,28C83.314,28 86,30.686 86,34C86,37.314 83.314,40 80,40C76.686,40 74,37.314 74,34C74,30.686 76.686,28 80,28Z"/>
+    
+    <!-- Person 2 - Body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M78,42C78,42 78,38 80,38C82,38 82,42 82,42L82,68C82,70 80,70 80,70C78,70 78,68 78,68Z"/>
+    
+    <!-- Person 2 - Left arm -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M68,31Q71,27 75,29L77,33Q76,34 73,33Z"/>
+    
+    <!-- Person 2 - Right arm -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M92,31Q89,27 85,29L83,33Q84,34 87,33Z"/>
+    
+    <!-- Connection line (simplified curved path) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,50 Q54,44 68,50 Q54,46 40,50 Z"/>
+    
+    <!-- Sports ball -->
+    <path
+        android:fillColor="#FFC107"
+        android:pathData="M54,36C56.209,36 58,37.791 58,40C58,42.209 56.209,44 54,44C51.791,44 50,42.209 50,40C50,37.791 51.791,36 54,36Z"/>
 </vector>

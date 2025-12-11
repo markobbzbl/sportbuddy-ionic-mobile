@@ -39,31 +39,25 @@
         </div>
 
         <form *ngIf="isEditing" [formGroup]="profileForm" class="profile-form">
-          <div class="avatar-edit-container">
-            <ion-avatar class="profile-avatar-edit">
-              <img *ngIf="avatarUrl" [src]="avatarUrl" alt="Profilbild">
-              <ion-icon *ngIf="!avatarUrl" name="person"></ion-icon>
-            </ion-avatar>
-            <div class="avatar-buttons">
-              <ion-button
-                fill="outline"
-                size="small"
-                (click)="takePicture()"
-                [disabled]="isLoading"
-              >
-                <ion-icon name="camera" slot="start"></ion-icon>
-                Foto aufnehmen
-              </ion-button>
-              <ion-button
-                fill="outline"
-                size="small"
-                (click)="selectPicture()"
-                [disabled]="isLoading"
-              >
-                <ion-icon name="images" slot="start"></ion-icon>
-                Aus Galerie
-              </ion-button>
-            </div>
+          <div class="avatar-buttons">
+            <ion-button
+              fill="outline"
+              size="small"
+              (click)="takePicture()"
+              [disabled]="isLoading"
+            >
+              <ion-icon name="camera" slot="start"></ion-icon>
+              Foto aufnehmen
+            </ion-button>
+            <ion-button
+              fill="outline"
+              size="small"
+              (click)="selectPicture()"
+              [disabled]="isLoading"
+            >
+              <ion-icon name="images" slot="start"></ion-icon>
+              Aus Galerie
+            </ion-button>
           </div>
 
           <ion-item>

@@ -8,11 +8,37 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
   email TEXT NOT NULL,
-  full_name TEXT,
+  first_name TEXT,
+  last_name TEXT,
   avatar_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
+
+-- Migrate existing full_name to first_name and last_name if needed
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'profiles' 
+    AND column_name = 'full_name'
+  ) THEN
+    -- Split full_name into first_name and last_name
+    UPDATE public.profiles
+    SET 
+      first_name = SPLIT_PART(full_name, ' ', 1),
+      last_name = CASE 
+        WHEN POSITION(' ' IN full_name) > 0 
+        THEN SUBSTRING(full_name FROM POSITION(' ' IN full_name) + 1)
+        ELSE ''
+      END
+    WHERE first_name IS NULL OR last_name IS NULL;
+    
+    -- Drop the old full_name column
+    ALTER TABLE public.profiles DROP COLUMN IF EXISTS full_name;
+  END IF;
+END $$;
 
 -- Create training_offers table
 CREATE TABLE IF NOT EXISTS public.training_offers (
@@ -61,6 +87,7 @@ CREATE POLICY "Users can update own profile"
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile"
   ON public.profiles FOR INSERT
+  TO public
   WITH CHECK (auth.uid() = id);
 
 -- Training offers policies
@@ -137,13 +164,23 @@ CREATE POLICY "Users can delete own avatar"
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name)
+  INSERT INTO public.profiles (id, email, first_name, last_name)
   VALUES (
     NEW.id,
     NEW.email,
-    NEW.raw_user_meta_data->>'full_name'
-  );
+    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'last_name', '')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    first_name = COALESCE(NULLIF(EXCLUDED.first_name, ''), profiles.first_name),
+    last_name = COALESCE(NULLIF(EXCLUDED.last_name, ''), profiles.last_name);
   RETURN NEW;
+EXCEPTION
+  WHEN others THEN
+    -- Log error but don't fail user creation
+    RAISE WARNING 'Error creating profile for user %: %', NEW.id, SQLERRM;
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

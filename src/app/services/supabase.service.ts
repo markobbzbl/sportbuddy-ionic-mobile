@@ -105,6 +105,21 @@ export class SupabaseService {
     return data;
   }
 
+  async createProfile(userId: string, email: string, firstName: string, lastName: string) {
+    const { data, error } = await this.supabase
+      .from('profiles')
+      .insert({
+        id: userId,
+        email: email,
+        first_name: firstName,
+        last_name: lastName
+      })
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
   async updateProfile(userId: string, updates: Partial<Profile>) {
     const { data, error } = await this.supabase
       .from('profiles')
@@ -128,14 +143,14 @@ export class SupabaseService {
       });
 
     if (uploadError) {
-      return { error: uploadError };
+      return { data: null, error: uploadError };
     }
 
-    const { data } = this.supabase.storage
+    const { data: urlData } = this.supabase.storage
       .from('avatars')
       .getPublicUrl(filePath);
 
-    return { data, error: null };
+    return { data: { publicUrl: urlData.publicUrl }, error: null };
   }
 
   // Training offers methods

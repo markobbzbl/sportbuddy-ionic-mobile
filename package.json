@@ -1,8 +1,8 @@
 {
   "name": "sportbuddy",
   "version": "1.0.0",
-  "author": "Sportbuddy Team",
-  "homepage": "https://sportbuddy.app/",
+  "author": "MeetMeFit Team",
+  "homepage": "https://meetmefit.app/",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -66,5 +66,5 @@
     "karma-jasmine-html-reporter": "~2.1.0",
     "typescript": "~5.9.0"
   },
-  "description": "MeetMeFit - Mobile App zum Finden von Sportpartnern"
+  "description": "Sportbuddy - Mobile App zum Finden von Sportpartnern"
 }

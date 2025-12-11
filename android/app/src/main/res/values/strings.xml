@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">MeetMeFit</string>
-    <string name="title_activity_main">MeetMeFit</string>
+    <string name="app_name">Sportbuddy</string>
+    <string name="title_activity_main">Sportbuddy</string>
     <string name="package_name">app.meetmefit.sportbuddy</string>
     <string name="custom_url_scheme">app.meetmefit.sportbuddy</string>
 </resources>

@@ -24,44 +24,41 @@ export class AuthService {
 
   async initAuth() {
     try {
-      // Try to get session, but don't fail if offline
+      // Try to get session from Supabase
       const { data: { session }, error } = await this.supabase.getSession();
+      
       if (error) {
         console.warn('Error getting session (might be offline):', error);
-        // Try to load user from storage
-        const storedUser = await this.storage.get<any>('offline_user');
-        if (storedUser) {
-          this.currentUserSubject.next(storedUser);
-          await this.loadProfile(storedUser.id);
-        }
+        // If there's an error getting session, don't auto-login from storage
+        // This prevents auto-login after logout
+        // Clear stored data to ensure clean state
+        await this.storage.remove('offline_user');
+        await this.storage.remove('offline_profile');
+        this.currentUserSubject.next(null);
+        this.currentProfileSubject.next(null);
         return;
       }
 
       if (session?.user) {
+        // Valid session exists
         this.currentUserSubject.next(session.user);
         // Store user for offline use
         await this.storage.set('offline_user', session.user);
         await this.loadProfile(session.user.id);
       } else {
-        // No session, try to load from storage
-        const storedUser = await this.storage.get<any>('offline_user');
-        if (storedUser) {
-          this.currentUserSubject.next(storedUser);
-          await this.loadProfile(storedUser.id);
-        }
+        // No valid session - clear any stored user data
+        await this.storage.remove('offline_user');
+        await this.storage.remove('offline_profile');
+        this.currentUserSubject.next(null);
+        this.currentProfileSubject.next(null);
       }
     } catch (error) {
       console.error('Error initializing auth:', error);
-      // Don't block app startup if auth init fails
-      // Try to load from storage
-      try {
-        const storedUser = await this.storage.get<any>('offline_user');
-        if (storedUser) {
-          this.currentUserSubject.next(storedUser);
-        }
-      } catch (storageError) {
-        console.error('Error loading user from storage:', storageError);
-      }
+      // On error, clear stored data to prevent auto-login
+      await this.storage.remove('offline_user');
+      await this.storage.remove('offline_profile');
+      this.currentUserSubject.next(null);
+      this.currentProfileSubject.next(null);
     }
   }
 
@@ -72,30 +69,17 @@ export class AuthService {
     }
     if (data.user) {
       this.currentUserSubject.next(data.user);
-      // Ensure profile is created/updated with first_name and last_name
-      // The trigger might create it, but we need to ensure it has the correct fields
+      // Profile should be created by trigger automatically
+      // Just wait a moment and try to load it
+      // Don't throw errors if profile creation fails - user is already created
       try {
-        const existingProfile = await this.supabase.getProfile(data.user.id);
-        if (existingProfile) {
-          // Update existing profile with name fields if they're missing
-          if (!existingProfile.first_name || !existingProfile.last_name) {
-            await this.supabase.updateProfile(data.user.id, {
-              first_name: firstName,
-              last_name: lastName
-            });
-          }
-        } else {
-          // Create profile if it doesn't exist (shouldn't happen with trigger, but just in case)
-          await this.supabase.updateProfile(data.user.id, {
-            first_name: firstName,
-            last_name: lastName
-          });
-        }
-      } catch (profileError) {
-        console.error('Error ensuring profile:', profileError);
-        // Continue anyway - profile might be created by trigger
+        // Wait for trigger to execute
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await this.loadProfile(data.user.id);
+      } catch (profileError: any) {
+        console.error('Error loading profile after signup:', profileError);
+        // Don't throw - user is created successfully
       }
-      await this.loadProfile(data.user.id);
     }
     return { data, error };
   }
@@ -117,8 +101,11 @@ export class AuthService {
     if (!error) {
       this.currentUserSubject.next(null);
       this.currentProfileSubject.next(null);
+      // Clear all stored user data
+      await this.storage.remove('offline_user');
       await this.storage.remove('offline_profile');
       await this.storage.remove('offline_training_offers');
+      await this.storage.remove('offline_created_offers');
     }
     return { error };
   }

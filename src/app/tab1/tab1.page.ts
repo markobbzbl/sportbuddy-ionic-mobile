@@ -29,10 +29,11 @@ import {
   IonText,
   IonBadge,
   IonList,
-  IonListHeader
+  IonListHeader,
+  IonSearchbar
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { add, location, time, person, create, trash, close, cloudOffline, people, checkmarkCircle, addCircleOutline, closeCircle } from 'ionicons/icons';
+import { add, location, time, person, create, trash, close, cloudOffline, people, checkmarkCircle, addCircleOutline, closeCircle, filter, closeCircleOutline } from 'ionicons/icons';
 import { SupabaseService, TrainingOffer, Profile, Participant } from '../services/supabase.service';
 import { AuthService } from '../services/auth.service';
 import { StorageService } from '../services/storage.service';
@@ -78,11 +79,13 @@ import { Subscription } from 'rxjs';
     IonText,
     IonBadge,
     IonList,
-    IonListHeader
+    IonListHeader,
+    IonSearchbar
   ]
 })
 export class Tab1Page implements OnInit, OnDestroy {
   trainingOffers: TrainingOffer[] = [];
+  filteredOffers: TrainingOffer[] = [];
   isLoading = false;
   isModalOpen = false;
   isEditMode = false;
@@ -96,6 +99,8 @@ export class Tab1Page implements OnInit, OnDestroy {
   selectedOfferParticipants: Participant[] = [];
   selectedOffer: TrainingOffer | null = null;
   loadingParticipants = false;
+  sportTypeFilter: string = '';
+  nameFilter: string = '';
   private subscriptions: Subscription[] = [];
   private successMessageTimeout?: any;
 
@@ -123,7 +128,7 @@ export class Tab1Page implements OnInit, OnDestroy {
     private syncService: SyncService,
     private fb: FormBuilder
   ) {
-    addIcons({ add, location, time, person, create, trash, close, cloudOffline, people, checkmarkCircle, addCircleOutline, closeCircle });
+    addIcons({ add, location, time, person, create, trash, close, cloudOffline, people, checkmarkCircle, addCircleOutline, closeCircle, filter, closeCircleOutline });
 
     this.offerForm = this.fb.group({
       sport_type: ['', Validators.required],
@@ -166,6 +171,8 @@ export class Tab1Page implements OnInit, OnDestroy {
     this.subscriptions.push(queueSub);
 
     await this.loadTrainingOffers();
+    // Initialize filteredOffers with all offers
+    this.filteredOffers = [...this.trainingOffers];
   }
 
   ngOnDestroy() {
@@ -226,6 +233,10 @@ export class Tab1Page implements OnInit, OnDestroy {
             await this.storage.set('offline_training_offers', this.trainingOffers);
             // Keep offline-created offers separate
             await this.storage.set('offline_created_offers', offlineOnly);
+            
+            // Apply filters after loading
+            this.applyFilters();
+            
             return; // Success, exit early
           }
         } catch (error: any) {
@@ -251,6 +262,9 @@ export class Tab1Page implements OnInit, OnDestroy {
       
       console.log('Final training offers:', this.trainingOffers.length, this.trainingOffers.map(o => ({ id: o.id, sport: o.sport_type, isOffline: this.isOfflineOffer(o) })));
       
+      // Apply filters after loading
+      this.applyFilters();
+      
       if (this.trainingOffers.length > 0) {
         this.errorMessage = '';
       } else {
@@ -272,7 +286,49 @@ export class Tab1Page implements OnInit, OnDestroy {
       }
     } finally {
       this.isLoading = false;
+      // Apply filters after loading completes
+      this.applyFilters();
     }
+  }
+
+  applyFilters() {
+    let filtered = [...this.trainingOffers];
+
+    // Filter by sport type
+    if (this.sportTypeFilter) {
+      filtered = filtered.filter(offer => offer.sport_type === this.sportTypeFilter);
+    }
+
+    // Filter by name (username)
+    if (this.nameFilter && this.nameFilter.trim()) {
+      const searchTerm = this.nameFilter.trim().toLowerCase();
+      filtered = filtered.filter(offer => {
+        const profileName = this.getProfileName(offer.profiles, offer.user_id).toLowerCase();
+        return profileName.includes(searchTerm);
+      });
+    }
+
+    this.filteredOffers = filtered;
+  }
+
+  onSportFilterChange(event: any) {
+    this.sportTypeFilter = event.detail.value || '';
+    this.applyFilters();
+  }
+
+  onNameFilterChange(event: any) {
+    this.nameFilter = event.detail.value || '';
+    this.applyFilters();
+  }
+
+  clearFilters() {
+    this.sportTypeFilter = '';
+    this.nameFilter = '';
+    this.applyFilters();
+  }
+
+  hasActiveFilters(): boolean {
+    return !!(this.sportTypeFilter || (this.nameFilter && this.nameFilter.trim()));
   }
 
   async handleRefresh(event: any) {

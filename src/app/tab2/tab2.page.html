@@ -1,13 +1,13 @@
 <ion-header [translucent]="true">
   <ion-toolbar>
-    <ion-title>In der Nähe</ion-title>
+    <ion-title>Meine Angebote</ion-title>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
   <ion-header collapse="condense">
     <ion-toolbar>
-      <ion-title size="large">In der Nähe</ion-title>
+      <ion-title size="large">Meine Angebote</ion-title>
     </ion-toolbar>
   </ion-header>
 
@@ -15,66 +15,193 @@
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
 
-  <div class="content-container">
-    <ion-text color="danger" *ngIf="errorMessage">
+  <!-- Messages at the top -->
+  <div class="messages-container">
+    <ion-text color="danger" *ngIf="errorMessage" class="message-banner error-banner">
       <p class="ion-padding">{{ errorMessage }}</p>
     </ion-text>
 
-    <div *ngIf="currentLocation" class="location-info">
-      <ion-icon name="location"></ion-icon>
-      <span>Ihr Standort: {{ currentLocation.lat.toFixed(4) }}, {{ currentLocation.lng.toFixed(4) }}</span>
+    <ion-text color="success" *ngIf="successMessage" class="message-banner success-banner">
+      <p class="ion-padding">{{ successMessage }}</p>
+    </ion-text>
+  </div>
+
+  <div class="content-container">
+    <ion-spinner *ngIf="isLoading && myOffers.length === 0" name="crescent"></ion-spinner>
+
+    <div *ngIf="myOffers.length === 0 && !isLoading" class="empty-state">
+      <ion-icon name="create" size="large"></ion-icon>
+      <p>Sie haben noch keine Trainingsangebote erstellt.</p>
+      <p>Erstellen Sie Ihr erstes Angebot im Feed!</p>
     </div>
 
-    <ion-spinner *ngIf="isLoading && nearbyOffers.length === 0" name="crescent"></ion-spinner>
-
-    <div *ngIf="nearbyOffers.length === 0 && !isLoading" class="empty-state">
-      <ion-icon name="location" size="large"></ion-icon>
-      <p>Keine Trainingsangebote in der Nähe gefunden.</p>
-      <p>Versuchen Sie es später erneut oder erstellen Sie selbst ein Angebot!</p>
-    </div>
-
-    <ion-card *ngFor="let offer of nearbyOffers" class="offer-card">
+    <ion-card *ngFor="let offer of myOffers" class="offer-card" [class.past-offer]="!isUpcoming(offer)">
       <ion-card-header>
-        <ion-card-title>{{ offer.sport_type }}</ion-card-title>
-        <div class="distance-badge">
-          <ion-icon name="navigate"></ion-icon>
-          <span>{{ getDistance(offer) }} km entfernt</span>
+        <div class="card-header-content">
+          <div>
+            <ion-card-title>{{ offer.sport_type }}</ion-card-title>
+            <div class="offer-meta">
+              <ion-icon name="time"></ion-icon>
+              <span>{{ formatDate(offer.date_time) }}</span>
+            </div>
+            <ion-badge *ngIf="!isUpcoming(offer)" color="medium" class="past-badge">Vergangen</ion-badge>
+          </div>
+          <div class="card-actions">
+            <ion-button fill="clear" size="small" (click)="openEditModal(offer)" aria-label="Bearbeiten">
+              <ion-icon name="create" slot="icon-only"></ion-icon>
+            </ion-button>
+            <ion-button fill="clear" size="small" color="danger" (click)="deleteOffer(offer)" aria-label="Löschen">
+              <ion-icon name="trash" slot="icon-only"></ion-icon>
+            </ion-button>
+          </div>
         </div>
       </ion-card-header>
       <ion-card-content>
         <div class="offer-info">
-          <div class="info-item">
-            <ion-icon name="location"></ion-icon>
-            <span>{{ offer.location }}</span>
+          <p><strong>Ort:</strong> {{ offer.location }}</p>
+          <p *ngIf="offer.description"><strong>Beschreibung:</strong> {{ offer.description }}</p>
+        </div>
+
+        <div class="participant-section">
+          <div class="participant-info">
+            <ion-icon name="people"></ion-icon>
+            <span class="participant-count">{{ offer.participant_count || 0 }}</span>
+            <span class="participant-label">Teilnehmer</span>
+            <ion-button
+              *ngIf="(offer.participant_count || 0) > 0"
+              fill="clear"
+              size="small"
+              (click)="viewParticipants(offer)"
+              class="view-participants-btn"
+            >
+              Anzeigen
+            </ion-button>
           </div>
-          <div class="info-item">
-            <ion-icon name="time"></ion-icon>
-            <span>{{ formatDate(offer.date_time) }}</span>
-          </div>
         </div>
-
-        <div *ngIf="offer.description" class="offer-description">
-          {{ offer.description }}
-        </div>
-
-        <div class="offer-author" *ngIf="offer.profiles">
-          <ion-avatar>
-            <img *ngIf="offer.profiles.avatar_url" [src]="offer.profiles.avatar_url" alt="Profilbild">
-            <ion-icon *ngIf="!offer.profiles.avatar_url" name="person"></ion-icon>
-          </ion-avatar>
-          <span>{{ getProfileName(offer.profiles) }}</span>
-        </div>
-
-        <ion-button
-          expand="block"
-          fill="outline"
-          (click)="openInMaps(offer)"
-          class="ion-margin-top"
-        >
-          <ion-icon name="navigate" slot="start"></ion-icon>
-          In Karten öffnen
-        </ion-button>
       </ion-card-content>
     </ion-card>
   </div>
+
+  <!-- Edit Modal -->
+  <ion-modal [isOpen]="isModalOpen" (didDismiss)="closeModal()">
+    <ng-template>
+      <ion-header>
+        <ion-toolbar>
+          <ion-title>Trainingsangebot bearbeiten</ion-title>
+          <ion-buttons slot="end">
+            <ion-button (click)="closeModal()" aria-label="Schließen">
+              <ion-icon name="close" slot="icon-only"></ion-icon>
+            </ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content class="ion-padding">
+        <form [formGroup]="offerForm" (ngSubmit)="onSubmitOffer()">
+          <ion-item>
+            <ion-label position="stacked">Sportart *</ion-label>
+            <ion-select formControlName="sport_type" placeholder="Sportart auswählen">
+              <ion-select-option *ngFor="let sport of sportTypes" [value]="sport">{{ sport }}</ion-select-option>
+            </ion-select>
+          </ion-item>
+          <ion-text color="danger" *ngIf="offerForm.get('sport_type')?.invalid && offerForm.get('sport_type')?.touched">
+            <p class="error-text">Bitte wählen Sie eine Sportart aus.</p>
+          </ion-text>
+
+          <ion-item>
+            <ion-label position="stacked">Ort *</ion-label>
+            <ion-input
+              formControlName="location"
+              placeholder="z.B. Sportplatz Berlin-Mitte"
+              [class.ion-invalid]="offerForm.get('location')?.invalid && offerForm.get('location')?.touched"
+            ></ion-input>
+          </ion-item>
+          <ion-text color="danger" *ngIf="offerForm.get('location')?.invalid && offerForm.get('location')?.touched">
+            <p class="error-text">Bitte geben Sie einen Ort ein.</p>
+          </ion-text>
+
+          <ion-item>
+            <ion-label position="stacked">Datum & Uhrzeit *</ion-label>
+            <ion-input
+              type="datetime-local"
+              formControlName="date_time"
+              [class.ion-invalid]="offerForm.get('date_time')?.invalid && offerForm.get('date_time')?.touched"
+            ></ion-input>
+          </ion-item>
+          <ion-text color="danger" *ngIf="offerForm.get('date_time')?.invalid && offerForm.get('date_time')?.touched">
+            <p class="error-text">Bitte wählen Sie ein Datum und eine Uhrzeit aus.</p>
+          </ion-text>
+
+          <ion-item>
+            <ion-label position="stacked">Beschreibung</ion-label>
+            <ion-textarea
+              formControlName="description"
+              placeholder="Optionale Beschreibung..."
+              rows="4"
+            ></ion-textarea>
+          </ion-item>
+
+          <ion-button
+            expand="block"
+            type="submit"
+            [disabled]="isLoading || offerForm.invalid"
+            class="ion-margin-top"
+          >
+            <ion-spinner *ngIf="isLoading" name="crescent"></ion-spinner>
+            <span *ngIf="!isLoading">Speichern</span>
+          </ion-button>
+        </form>
+      </ion-content>
+    </ng-template>
+  </ion-modal>
+
+  <!-- Participants Modal -->
+  <ion-modal [isOpen]="participantsModalOpen" (didDismiss)="closeParticipantsModal()">
+    <ng-template>
+      <ion-header>
+        <ion-toolbar>
+          <ion-title>Teilnehmer</ion-title>
+          <ion-buttons slot="end">
+            <ion-button (click)="closeParticipantsModal()" aria-label="Schließen">
+              <ion-icon name="close" slot="icon-only"></ion-icon>
+            </ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content class="ion-padding">
+        <ion-spinner *ngIf="loadingParticipants" name="crescent"></ion-spinner>
+
+        <div *ngIf="!loadingParticipants">
+          <p *ngIf="selectedOfferParticipants.length === 0" class="ion-text-center ion-margin-top">
+            Noch keine Teilnehmer
+          </p>
+
+          <ion-list *ngIf="selectedOfferParticipants.length > 0">
+            <ion-list-header>
+              <ion-label>{{ selectedOfferParticipants.length }} Teilnehmer</ion-label>
+            </ion-list-header>
+            <ion-item *ngFor="let participant of selectedOfferParticipants">
+              <ion-avatar slot="start" class="participant-avatar">
+                <img *ngIf="participant.profiles?.avatar_url" [src]="participant.profiles?.avatar_url" alt="Profilbild">
+                <ion-icon *ngIf="!participant.profiles?.avatar_url" name="person"></ion-icon>
+              </ion-avatar>
+              <ion-label>
+                <h2>{{ getParticipantName(participant) }}</h2>
+              </ion-label>
+              <ion-button
+                fill="clear"
+                size="small"
+                color="danger"
+                (click)="removeParticipant(participant)"
+                [disabled]="isLoading"
+                slot="end"
+                class="remove-participant-btn"
+              >
+                <ion-icon name="trash" slot="icon-only"></ion-icon>
+              </ion-button>
+            </ion-item>
+          </ion-list>
+        </div>
+      </ion-content>
+    </ng-template>
+  </ion-modal>
 </ion-content>
