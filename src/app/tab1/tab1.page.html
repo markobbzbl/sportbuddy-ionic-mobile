@@ -26,6 +26,14 @@
       <p class="ion-padding">{{ successMessage }}</p>
     </ion-text>
 
+    <ion-text *ngIf="!isOnline" color="warning" style="display: block; padding: 12px; margin: 8px; background: rgba(255, 152, 0, 0.1); border-left: 4px solid #ff9800; border-radius: 4px;">
+      <p style="margin: 0; font-weight: 500;">
+        <ion-icon name="cloud-offline" style="vertical-align: middle; margin-right: 4px;"></ion-icon>
+        Offline-Modus: Erstellte Angebote werden synchronisiert, sobald Sie online sind.
+        <span *ngIf="queueCount > 0"> ({{ queueCount }} ausstehend)</span>
+      </p>
+    </ion-text>
+
     <div *ngIf="trainingOffers.length === 0 && !isLoading" class="empty-state">
       <p>Noch keine Trainingsangebote vorhanden.</p>
       <p>Erstelle das erste Angebot!</p>
@@ -59,12 +67,12 @@
         <div *ngIf="offer.description" class="offer-description">
           {{ offer.description }}
         </div>
-        <div class="offer-author" *ngIf="offer.profiles">
+        <div class="offer-author">
           <ion-avatar>
-            <img *ngIf="offer.profiles.avatar_url" [src]="offer.profiles.avatar_url" alt="Profilbild">
-            <ion-icon *ngIf="!offer.profiles.avatar_url" name="person"></ion-icon>
+            <img *ngIf="offer.profiles?.avatar_url" [src]="offer.profiles?.avatar_url" alt="Profilbild">
+            <ion-icon *ngIf="!offer.profiles?.avatar_url" name="person"></ion-icon>
           </ion-avatar>
-          <span>{{ getProfileName(offer.profiles) }}</span>
+          <span>{{ getProfileName(offer.profiles, offer.user_id) }}</span>
         </div>
       </ion-card-content>
     </ion-card>

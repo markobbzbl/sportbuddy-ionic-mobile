@@ -24,14 +24,44 @@ export class AuthService {
 
   async initAuth() {
     try {
-      const { data: { session } } = await this.supabase.getSession();
+      // Try to get session, but don't fail if offline
+      const { data: { session }, error } = await this.supabase.getSession();
+      if (error) {
+        console.warn('Error getting session (might be offline):', error);
+        // Try to load user from storage
+        const storedUser = await this.storage.get<any>('offline_user');
+        if (storedUser) {
+          this.currentUserSubject.next(storedUser);
+          await this.loadProfile(storedUser.id);
+        }
+        return;
+      }
+
       if (session?.user) {
         this.currentUserSubject.next(session.user);
+        // Store user for offline use
+        await this.storage.set('offline_user', session.user);
         await this.loadProfile(session.user.id);
+      } else {
+        // No session, try to load from storage
+        const storedUser = await this.storage.get<any>('offline_user');
+        if (storedUser) {
+          this.currentUserSubject.next(storedUser);
+          await this.loadProfile(storedUser.id);
+        }
       }
     } catch (error) {
       console.error('Error initializing auth:', error);
       // Don't block app startup if auth init fails
+      // Try to load from storage
+      try {
+        const storedUser = await this.storage.get<any>('offline_user');
+        if (storedUser) {
+          this.currentUserSubject.next(storedUser);
+        }
+      } catch (storageError) {
+        console.error('Error loading user from storage:', storageError);
+      }
     }
   }
 
@@ -42,7 +72,29 @@ export class AuthService {
     }
     if (data.user) {
       this.currentUserSubject.next(data.user);
-      // Profile is created automatically by trigger, but we load it
+      // Ensure profile is created/updated with first_name and last_name
+      // The trigger might create it, but we need to ensure it has the correct fields
+      try {
+        const existingProfile = await this.supabase.getProfile(data.user.id);
+        if (existingProfile) {
+          // Update existing profile with name fields if they're missing
+          if (!existingProfile.first_name || !existingProfile.last_name) {
+            await this.supabase.updateProfile(data.user.id, {
+              first_name: firstName,
+              last_name: lastName
+            });
+          }
+        } else {
+          // Create profile if it doesn't exist (shouldn't happen with trigger, but just in case)
+          await this.supabase.updateProfile(data.user.id, {
+            first_name: firstName,
+            last_name: lastName
+          });
+        }
+      } catch (profileError) {
+        console.error('Error ensuring profile:', profileError);
+        // Continue anyway - profile might be created by trigger
+      }
       await this.loadProfile(data.user.id);
     }
     return { data, error };
