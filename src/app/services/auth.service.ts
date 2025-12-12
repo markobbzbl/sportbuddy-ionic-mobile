@@ -90,6 +90,10 @@ export class AuthService {
       throw error;
     }
     if (data.user) {
+      // Clear any existing profile before loading new one
+      this.currentProfileSubject.next(null);
+      // Clear offline profile to prevent showing wrong user's data
+      await this.storage.remove('offline_profile');
       this.currentUserSubject.next(data.user);
       await this.loadProfile(data.user.id);
     }
@@ -128,12 +132,23 @@ export class AuthService {
       if (profile) {
         this.currentProfileSubject.next(profile);
         await this.storage.set('offline_profile', profile);
+      } else {
+        // No profile found, clear any stale offline profile
+        await this.storage.remove('offline_profile');
+        this.currentProfileSubject.next(null);
       }
     } catch (error) {
-      // Try to load from offline storage
+      // Try to load from offline storage, but ONLY if it belongs to the current user
       const offlineProfile = await this.storage.get<Profile>('offline_profile');
-      if (offlineProfile) {
+      if (offlineProfile && offlineProfile.id === userId) {
+        // Only use offline profile if it belongs to the current user
         this.currentProfileSubject.next(offlineProfile);
+      } else {
+        // Profile doesn't belong to current user or doesn't exist - clear it
+        if (offlineProfile && offlineProfile.id !== userId) {
+          await this.storage.remove('offline_profile');
+        }
+        this.currentProfileSubject.next(null);
       }
     }
   }

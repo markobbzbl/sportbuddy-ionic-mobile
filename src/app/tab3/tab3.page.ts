@@ -110,6 +110,21 @@ export class Tab3Page implements OnInit, OnDestroy {
     });
     this.subscriptions.push(themeSub);
 
+    // Subscribe to user changes to clear profile when user changes
+    const userSub = this.authService.currentUser$.subscribe(user => {
+      if (!user) {
+        // User logged out - clear profile state
+        this.profile = null;
+        this.avatarUrl = null;
+        this.userEmail = '';
+        this.profileForm.reset();
+      } else {
+        // User changed - reload profile
+        this.loadProfile();
+      }
+    });
+    this.subscriptions.push(userSub);
+
     await this.loadProfile();
   }
 
@@ -164,9 +179,10 @@ export class Tab3Page implements OnInit, OnDestroy {
         }
       }
 
-      // Load from offline storage
+      // Load from offline storage, but ONLY if it belongs to the current user
       const offlineProfile = await this.storage.get<Profile>('offline_profile');
-      if (offlineProfile) {
+      if (offlineProfile && offlineProfile.id === user.id) {
+        // Only use offline profile if it belongs to the current user
         this.profile = offlineProfile;
         this.avatarUrl = offlineProfile.avatar_url || null;
         this.profileForm.patchValue({
@@ -174,6 +190,10 @@ export class Tab3Page implements OnInit, OnDestroy {
           last_name: offlineProfile.last_name || ''
         });
       } else {
+        // Profile doesn't belong to current user or doesn't exist - clear it
+        if (offlineProfile && offlineProfile.id !== user.id) {
+          await this.storage.remove('offline_profile');
+        }
         // No profile found, create empty one
         this.profile = {
           id: user.id,
@@ -185,16 +205,20 @@ export class Tab3Page implements OnInit, OnDestroy {
       }
     } catch (error: any) {
       console.error('Error loading profile:', error);
-      // Try offline storage as last resort
+      // Try offline storage as last resort, but ONLY if it belongs to the current user
       try {
         const offlineProfile = await this.storage.get<Profile>('offline_profile');
-        if (offlineProfile) {
+        if (offlineProfile && offlineProfile.id === user.id) {
+          // Only use offline profile if it belongs to the current user
           this.profile = offlineProfile;
           this.avatarUrl = offlineProfile.avatar_url || null;
           this.profileForm.patchValue({
             first_name: offlineProfile.first_name || '',
             last_name: offlineProfile.last_name || ''
           });
+        } else if (offlineProfile && offlineProfile.id !== user.id) {
+          // Profile doesn't belong to current user - clear it
+          await this.storage.remove('offline_profile');
         }
       } catch (storageError) {
         console.error('Error loading from storage:', storageError);
@@ -392,6 +416,12 @@ export class Tab3Page implements OnInit, OnDestroy {
 
     this.isLoading = true;
     try {
+      // Clear local profile state before signing out
+      this.profile = null;
+      this.avatarUrl = null;
+      this.userEmail = '';
+      this.profileForm.reset();
+      
       await this.authService.signOut();
       this.router.navigate(['/login']);
     } catch (error: any) {
