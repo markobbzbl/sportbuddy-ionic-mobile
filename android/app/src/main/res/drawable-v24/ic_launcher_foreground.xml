@@ -29,7 +29,7 @@
     
     <!-- Group to translate icon content downward for better centering -->
     <group
-        android:translateY="5">
+        android:translateY="10">
         
         <!-- Person 1 (left) - Head -->
         <path
