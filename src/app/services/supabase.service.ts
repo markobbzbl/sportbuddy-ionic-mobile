@@ -153,6 +153,28 @@ export class SupabaseService {
     return { data: { publicUrl: urlData.publicUrl }, error: null };
   }
 
+  async uploadVoiceMemo(userId: string, file: File) {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `${userId}/${fileName}`;
+
+    const { error: uploadError } = await this.supabase.storage
+      .from('voice_memos')
+      .upload(filePath, file, {
+        upsert: false
+      });
+
+    if (uploadError) {
+      return { data: null, error: uploadError };
+    }
+
+    const { data: urlData } = this.supabase.storage
+      .from('voice_memos')
+      .getPublicUrl(filePath);
+
+    return { data: { publicUrl: urlData.publicUrl }, error: null };
+  }
+
   // Training offers methods
   async getTrainingOffers() {
     const currentUser = await this.supabase.auth.getUser();
@@ -242,10 +264,17 @@ export class SupabaseService {
           last_name,
           avatar_url
         )
-      `)
-      .single();
+      `);
 
-    return { data, error };
+    if (error) {
+      return { data: null, error };
+    }
+
+    if (!data || data.length === 0) {
+      return { data: null, error: new Error('Trainingsangebot konnte nicht aktualisiert werden (nicht gefunden oder fehlende Berechtigung)') };
+    }
+
+    return { data: data[0], error: null };
   }
 
   async deleteTrainingOffer(id: string) {

@@ -33,8 +33,9 @@ import {
   IonSearchbar
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { add, location, time, person, create, trash, close, cloudOffline, people, checkmarkCircle, addCircleOutline, closeCircle, filter, closeCircleOutline } from 'ionicons/icons';
+import { add, location, time, person, create, trash, close, cloudOffline, people, checkmarkCircle, addCircleOutline, closeCircle, filter, closeCircleOutline, mic, stop, play, pause } from 'ionicons/icons';
 import { Geolocation } from '@capacitor/geolocation';
+import { VoiceRecorder } from 'capacitor-voice-recorder';
 import { SupabaseService, TrainingOffer, Profile, Participant } from '../services/supabase.service';
 import { AuthService } from '../services/auth.service';
 import { StorageService } from '../services/storage.service';
@@ -112,6 +113,20 @@ export class Tab1Page implements OnInit, OnDestroy {
   selectedAddress: string = '';
   isGettingLocation = false;
 
+  // Voice memo properties
+  isRecording = false;
+  recordingTime = 0;
+  recordingInterval: any = null;
+  recordedAudioUrl: string | null = null;
+  recordedAudioBlob: Blob | null = null;
+  isPlayingAudio = false;
+  audioPlayer: HTMLAudioElement | null = null;
+  waveformBars: number[] = [];
+  playingAudioUrl: string | null = null;
+  playingAudioElement: HTMLAudioElement | null = null;
+  voiceMemoWaveforms: Map<string, number[]> = new Map();
+  waveformAnimationIntervals: Map<string, any> = new Map();
+
   sportTypes = [
     'Fußball',
     'Basketball',
@@ -136,7 +151,7 @@ export class Tab1Page implements OnInit, OnDestroy {
     private syncService: SyncService,
     private fb: FormBuilder
   ) {
-    addIcons({ add, location, time, person, create, trash, close, cloudOffline, people, checkmarkCircle, addCircleOutline, closeCircle, filter, closeCircleOutline });
+    addIcons({ add, location, time, person, create, trash, close, cloudOffline, people, checkmarkCircle, addCircleOutline, closeCircle, filter, closeCircleOutline, mic, stop, play, pause });
 
     this.offerForm = this.fb.group({
       sport_type: ['', Validators.required],
@@ -348,7 +363,307 @@ export class Tab1Page implements OnInit, OnDestroy {
     this.isEditMode = false;
     this.editingOffer = null;
     this.offerForm.reset();
+    this.resetVoiceMemo();
     this.isModalOpen = true;
+  }
+
+  async startRecording() {
+    try {
+      // Request permissions
+      const permissionResult = await VoiceRecorder.requestAudioRecordingPermission();
+      if (!permissionResult.value) {
+        this.errorMessage = 'Mikrofon-Berechtigung wurde nicht erteilt';
+        return;
+      }
+
+      // Start recording
+      await VoiceRecorder.startRecording();
+      this.isRecording = true;
+      this.recordingTime = 0;
+      this.generateWaveformBars();
+      
+      // Start timer
+      this.recordingInterval = setInterval(() => {
+        this.recordingTime++;
+        // Update waveform during recording
+        this.updateWaveformBars();
+      }, 1000);
+    } catch (error: any) {
+      console.error('Error starting recording:', error);
+      this.errorMessage = 'Fehler beim Starten der Aufnahme: ' + (error.message || 'Unbekannter Fehler');
+      this.isRecording = false;
+    }
+  }
+
+  generateWaveformBars() {
+    // Generate random heights for waveform bars (simulating audio levels) - max 30px to fit container
+    this.waveformBars = Array.from({ length: 30 }, () => Math.random() * 25 + 10);
+  }
+
+  updateWaveformBars() {
+    // Update waveform bars with new random values during recording - max 30px to fit container
+    if (this.isRecording) {
+      this.waveformBars = this.waveformBars.map(() => Math.random() * 25 + 10);
+    }
+  }
+
+  async stopRecording() {
+    try {
+      if (!this.isRecording) return;
+
+      const result = await VoiceRecorder.stopRecording();
+      
+      if (result.value && result.value.recordDataBase64) {
+        // Convert base64 to blob
+        const base64Data = result.value.recordDataBase64;
+        const mimeType = result.value.mimeType || 'audio/m4a';
+        
+        // Convert base64 to blob
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        this.recordedAudioBlob = new Blob([byteArray], { type: mimeType });
+        
+        // Create URL for playback
+        this.recordedAudioUrl = URL.createObjectURL(this.recordedAudioBlob);
+      }
+
+      this.isRecording = false;
+      if (this.recordingInterval) {
+        clearInterval(this.recordingInterval);
+        this.recordingInterval = null;
+      }
+    } catch (error: any) {
+      console.error('Error stopping recording:', error);
+      this.errorMessage = 'Fehler beim Stoppen der Aufnahme: ' + (error.message || 'Unbekannter Fehler');
+      this.isRecording = false;
+      if (this.recordingInterval) {
+        clearInterval(this.recordingInterval);
+        this.recordingInterval = null;
+      }
+    }
+  }
+
+  async playRecordedAudio() {
+    if (!this.recordedAudioUrl) return;
+
+    try {
+      if (this.audioPlayer) {
+        // If already playing, pause it
+        if (!this.audioPlayer.paused) {
+          this.audioPlayer.pause();
+          this.isPlayingAudio = false;
+          return;
+        }
+      }
+
+      this.audioPlayer = new Audio(this.recordedAudioUrl);
+      this.isPlayingAudio = true;
+
+      // Animate waveform during playback
+      this.animateWaveformDuringPlayback();
+
+      this.audioPlayer.onended = () => {
+        this.isPlayingAudio = false;
+        this.audioPlayer = null;
+        this.stopWaveformAnimation();
+      };
+
+      this.audioPlayer.onerror = () => {
+        this.errorMessage = 'Fehler beim Abspielen der Aufnahme';
+        this.isPlayingAudio = false;
+        this.audioPlayer = null;
+        this.stopWaveformAnimation();
+      };
+
+      await this.audioPlayer.play();
+    } catch (error: any) {
+      console.error('Error playing audio:', error);
+      this.errorMessage = 'Fehler beim Abspielen der Aufnahme';
+      this.isPlayingAudio = false;
+      this.audioPlayer = null;
+    }
+  }
+
+  animateWaveformDuringPlayback() {
+    if (!this.isPlayingAudio) return;
+    const animationInterval = setInterval(() => {
+      if (!this.isPlayingAudio || !this.audioPlayer || this.audioPlayer.paused) {
+        clearInterval(animationInterval);
+        return;
+      }
+      this.updateWaveformBars();
+    }, 100);
+  }
+
+  stopWaveformAnimation() {
+    // Reset waveform to static state
+    if (this.recordedAudioUrl) {
+      this.generateWaveformBars();
+    }
+  }
+
+  deleteRecordedAudio() {
+    if (this.audioPlayer) {
+      this.audioPlayer.pause();
+      this.audioPlayer = null;
+    }
+    if (this.recordedAudioUrl) {
+      URL.revokeObjectURL(this.recordedAudioUrl);
+    }
+    this.recordedAudioUrl = null;
+    this.recordedAudioBlob = null;
+    this.isPlayingAudio = false;
+    this.recordingTime = 0;
+  }
+
+  resetVoiceMemo() {
+    this.deleteRecordedAudio();
+    if (this.recordingInterval) {
+      clearInterval(this.recordingInterval);
+      this.recordingInterval = null;
+    }
+    this.isRecording = false;
+    this.recordingTime = 0;
+    this.waveformBars = [];
+  }
+
+  formatRecordingTime(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  // Parse description to extract text and voice memo URLs
+  parseDescription(description: string | undefined): { text: string; voiceMemoUrl: string | null } {
+    if (!description) return { text: '', voiceMemoUrl: null };
+    
+    // More robust regex to match voice memo pattern - handles any whitespace, newlines, etc.
+    // Pattern: [Sprachnachricht: URL] with flexible spacing
+    const voiceMemoRegex = /\[Sprachnachricht:\s*(https?:\/\/[^\]]+)\]/gi;
+    
+    // Use exec to find all matches (compatible with older TypeScript)
+    const matches: RegExpExecArray[] = [];
+    let match: RegExpExecArray | null;
+    const regex = new RegExp(voiceMemoRegex.source, voiceMemoRegex.flags);
+    
+    while ((match = regex.exec(description)) !== null) {
+      matches.push(match);
+    }
+    
+    if (matches.length > 0) {
+      // Extract URL from the last match (most recent voice memo)
+      const lastMatch = matches[matches.length - 1];
+      const voiceMemoUrl = lastMatch[1] || null;
+      
+      // Remove ALL voice memo patterns from description
+      let text = description.replace(voiceMemoRegex, '');
+      
+      // Clean up extra whitespace and newlines
+      text = text
+        .replace(/\n\n+/g, '\n') // Replace multiple newlines with single
+        .replace(/^\s+|\s+$/g, '') // Remove leading/trailing whitespace
+        .replace(/^\n+|\n+$/g, '') // Remove leading/trailing newlines
+        .trim();
+      
+      return { text, voiceMemoUrl };
+    }
+    
+    return { text: description.trim(), voiceMemoUrl: null };
+  }
+
+  // Play voice memo from URL
+  async playVoiceMemo(url: string) {
+    try {
+      if (this.playingAudioElement && this.playingAudioUrl === url) {
+        if (!this.playingAudioElement.paused) {
+          this.playingAudioElement.pause();
+          this.playingAudioUrl = null;
+          this.playingAudioElement = null;
+          this.stopVoiceMemoWaveformAnimation(url);
+          return;
+        }
+      }
+
+      // Initialize waveform if not exists - max 30px to fit container
+      if (!this.voiceMemoWaveforms.has(url)) {
+        this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => Math.random() * 20 + 10));
+      }
+
+      this.playingAudioElement = new Audio(url);
+      this.playingAudioUrl = url;
+
+      // Start waveform animation
+      this.startVoiceMemoWaveformAnimation(url);
+
+      this.playingAudioElement.onended = () => {
+        this.playingAudioUrl = null;
+        this.playingAudioElement = null;
+        this.stopVoiceMemoWaveformAnimation(url);
+      };
+
+      this.playingAudioElement.onerror = () => {
+        this.errorMessage = 'Fehler beim Abspielen der Sprachnachricht';
+        this.playingAudioUrl = null;
+        this.playingAudioElement = null;
+        this.stopVoiceMemoWaveformAnimation(url);
+      };
+
+      await this.playingAudioElement.play();
+    } catch (error: any) {
+      console.error('Error playing voice memo:', error);
+      this.errorMessage = 'Fehler beim Abspielen der Sprachnachricht';
+      this.playingAudioUrl = null;
+      this.playingAudioElement = null;
+      this.stopVoiceMemoWaveformAnimation(url);
+    }
+  }
+
+  startVoiceMemoWaveformAnimation(url: string) {
+    const interval = setInterval(() => {
+      if (this.playingAudioUrl === url && this.playingAudioElement && !this.playingAudioElement.paused) {
+        const currentWaveform = this.voiceMemoWaveforms.get(url) || [];
+        // Max 30px to fit container
+        const newWaveform = currentWaveform.map(() => Math.random() * 20 + 10);
+        this.voiceMemoWaveforms.set(url, newWaveform);
+      } else {
+        this.stopVoiceMemoWaveformAnimation(url);
+      }
+    }, 150);
+    this.waveformAnimationIntervals.set(url, interval);
+  }
+
+  stopVoiceMemoWaveformAnimation(url: string) {
+    const interval = this.waveformAnimationIntervals.get(url);
+    if (interval) {
+      clearInterval(interval);
+      this.waveformAnimationIntervals.delete(url);
+    }
+    // Reset to static waveform - max 30px to fit container
+    if (this.voiceMemoWaveforms.has(url)) {
+      this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => 15));
+    }
+  }
+
+  getVoiceMemoWaveform(url: string): number[] {
+    if (!this.voiceMemoWaveforms.has(url)) {
+      // Default static waveform - max 30px to fit container
+      this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => 15));
+    }
+    return this.voiceMemoWaveforms.get(url) || Array.from({ length: 30 }, () => 15);
+  }
+
+  isPlayingVoiceMemo(url: string): boolean {
+    return this.playingAudioUrl === url && 
+           this.playingAudioElement !== null && 
+           this.playingAudioElement.paused === false;
+  }
+
+  getRandomWaveformHeight(): number {
+    return Math.random() * 40 + 10;
   }
 
   async onSubmitOffer() {
@@ -366,7 +681,62 @@ export class Tab1Page implements OnInit, OnDestroy {
         throw new Error('Nicht angemeldet');
       }
 
-      const formValue = this.offerForm.value;
+      let formValue = { ...this.offerForm.value };
+
+      // Check if we need to show confirmation dialog for voice memo replacement
+      if (this.isEditMode && this.editingOffer && this.recordedAudioBlob) {
+        const existingVoiceMemo = this.parseDescription(this.editingOffer.description).voiceMemoUrl;
+        if (existingVoiceMemo) {
+          const confirmed = confirm('Möchten Sie wirklich die Sprachnachricht ersetzen? Die alte Aufnahme wird überschrieben.');
+          if (!confirmed) {
+            this.isLoading = false;
+            return; // User cancelled
+          }
+        }
+      }
+
+      // Handle voice memo upload if recorded
+      if (this.recordedAudioBlob && this.isOnline) {
+        try {
+          const fileName = `voice-${Date.now()}.m4a`;
+          const file = new File([this.recordedAudioBlob], fileName, { type: 'audio/m4a' });
+          const { data: uploadData, error: uploadError } = await this.supabase.uploadVoiceMemo(user.id, file);
+          
+          if (uploadError) {
+            console.error('Error uploading voice memo:', uploadError);
+            // Continue without voice memo if upload fails
+          } else if (uploadData?.publicUrl) {
+            // Remove any existing voice memo URL from description and add new one
+            // Match pattern with any whitespace/newlines
+            const voiceMemoRegex = /\[Sprachnachricht:\s*https?:\/\/[^\]]+\]/gi;
+            let cleanDescription = formValue.description ? formValue.description.replace(voiceMemoRegex, '') : '';
+            // Clean up extra newlines
+            cleanDescription = cleanDescription.replace(/\n\n+/g, '\n').replace(/^\n+|\n+$/g, '').trim();
+            // Add new voice memo URL at the end
+            formValue.description = cleanDescription 
+              ? `${cleanDescription}\n\n[Sprachnachricht: ${uploadData.publicUrl}]`
+              : `[Sprachnachricht: ${uploadData.publicUrl}]`;
+          }
+        } catch (error: any) {
+          console.error('Error processing voice memo:', error);
+          // Continue without voice memo if processing fails
+        }
+      } else if (this.recordedAudioBlob && !this.isOnline) {
+        // Offline: store blob reference for later upload
+        // For now, we'll just note that there's a voice memo to upload later
+        // This could be enhanced to store the blob in IndexedDB
+        console.log('Voice memo recorded offline, will need to upload when online');
+      } else if (this.isEditMode && this.editingOffer && !this.recordedAudioBlob) {
+        // No new voice memo recorded, preserve existing one if it exists
+        const existingVoiceMemo = this.parseDescription(this.editingOffer.description).voiceMemoUrl;
+        if (existingVoiceMemo) {
+          // Preserve the existing voice memo by appending it to the description
+          const cleanDescription = formValue.description ? formValue.description.trim() : '';
+          formValue.description = cleanDescription 
+            ? `${cleanDescription}\n\n[Sprachnachricht: ${existingVoiceMemo}]`
+            : `[Sprachnachricht: ${existingVoiceMemo}]`;
+        }
+      }
 
       if (this.isEditMode && this.editingOffer) {
         // Update existing offer
@@ -535,6 +905,7 @@ export class Tab1Page implements OnInit, OnDestroy {
       
       this.isModalOpen = false;
       this.offerForm.reset();
+      this.resetVoiceMemo();
     } catch (error: any) {
       this.errorMessage = error.message || 'Fehler beim Speichern des Trainingsangebots';
     } finally {
@@ -545,11 +916,16 @@ export class Tab1Page implements OnInit, OnDestroy {
   openEditModal(offer: TrainingOffer) {
     this.isEditMode = true;
     this.editingOffer = offer;
+    this.resetVoiceMemo();
+    
+    // Parse description to remove voice memo URL for editing
+    const parsedDescription = this.parseDescription(offer.description);
+    
     this.offerForm.patchValue({
       sport_type: offer.sport_type,
       location: offer.location,
       date_time: offer.date_time ? new Date(offer.date_time).toISOString().slice(0, 16) : '',
-      description: offer.description || ''
+      description: parsedDescription.text || ''
     });
     this.isModalOpen = true;
   }
@@ -687,6 +1063,7 @@ export class Tab1Page implements OnInit, OnDestroy {
     this.offerForm.reset();
     this.editingOffer = null;
     this.isEditMode = false;
+    this.resetVoiceMemo();
   }
 
   async toggleParticipation(offer: TrainingOffer) {

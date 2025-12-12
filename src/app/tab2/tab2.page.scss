@@ -174,3 +174,99 @@
   font-size: 0.85rem;
   margin: 0.25rem 0;
 }
+.voice-memo-player-card {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background-color: var(--ion-color-light);
+  border-radius: 8px;
+}
+.voice-memo-waveform-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.voice-memo-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: 1;
+  height: 40px;
+  max-height: 40px;
+  padding: 0.5rem;
+  background-color: rgba(var(--ion-color-primary-rgb), 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.waveform-bar {
+  width: 3px;
+  background-color: var(--ion-color-primary);
+  border-radius: 2px;
+  min-height: 8px;
+  max-height: 30px;
+  transition: height 0.15s ease;
+  align-self: flex-end;
+  &.playing {
+    background-color: var(--ion-color-primary);
+  }
+}
+.voice-memo-play-btn {
+  --padding-start: 0.5rem;
+  --padding-end: 0.5rem;
+  margin: 0;
+  width: 40px;
+  height: 40px;
+}
+.voice-memo-section {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: var(--ion-color-light);
+  border-radius: 8px;
+}
+.voice-memo-label {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-weight: 500;
+  color: var(--ion-color-dark);
+}
+.voice-memo-preview-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+.voice-memo-waveform-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: 1;
+  height: 50px;
+  max-height: 50px;
+  padding: 0.5rem;
+  background-color: rgba(var(--ion-color-primary-rgb), 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.waveform-bar-preview {
+  width: 3px;
+  background-color: var(--ion-color-primary);
+  border-radius: 2px;
+  transition: height 0.1s ease;
+  min-height: 8px;
+  max-height: 40px;
+  align-self: flex-end;
+  &.playing {
+    animation: waveform-pulse 0.3s ease-in-out infinite;
+  }
+}
+@keyframes waveform-pulse {
+  0%,100%{opacity:0.6}50%{opacity:1}
+}
+.voice-memo-preview-btn {
+  --padding-start: 0.5rem;
+  --padding-end: 0.5rem;
+  margin: 0;
+  width: 40px;
+  height: 40px;
+}

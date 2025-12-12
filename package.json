@@ -30,12 +30,15 @@
     "@capacitor/haptics": "7.0.2",
     "@capacitor/keyboard": "7.0.3",
     "@capacitor/preferences": "^7.0.1",
+    "@capacitor/push-notifications": "^7.0.4",
     "@capacitor/status-bar": "7.0.3",
     "@ionic/angular": "^8.0.0",
     "@supabase/supabase-js": "^2.39.0",
+    "capacitor-voice-recorder": "^7.0.6",
     "ionicons": "^7.0.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
+    "wavesurfer.js": "^7.12.1",
     "zone.js": "~0.15.0"
   },
   "devDependencies": {

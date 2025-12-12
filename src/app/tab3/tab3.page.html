@@ -115,13 +115,18 @@
         <ion-card-title>Einstellungen</ion-card-title>
       </ion-card-header>
       <ion-card-content>
-        <ion-item button (click)="toggleDarkMode()">
+        <ion-item>
           <ion-icon name="moon" slot="start" *ngIf="isDarkMode"></ion-icon>
           <ion-icon name="sunny" slot="start" *ngIf="!isDarkMode"></ion-icon>
           <ion-label>
             <h2>Dark Mode</h2>
             <p>{{ isDarkMode ? 'Aktiviert' : 'Deaktiviert' }}</p>
           </ion-label>
+          <ion-toggle
+            [checked]="isDarkMode"
+            (ionChange)="toggleDarkMode()"
+            slot="end"
+          ></ion-toggle>
         </ion-item>
 
 

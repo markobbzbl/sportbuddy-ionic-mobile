@@ -71,7 +71,7 @@
   </div>
 
   <div class="content-container">
-    <ion-spinner *ngIf="isLoading && trainingOffers.length === 0" name="crescent"></ion-spinner>
+    <ion-spinner *ngIf="isLoading && trainingOffers.length === 0" name="crescent" class="page-loading-spinner"></ion-spinner>
 
     <div *ngIf="filteredOffers.length === 0 && !isLoading && trainingOffers.length > 0" class="empty-state">
       <p>Keine Angebote gefunden.</p>
@@ -108,8 +108,33 @@
         </div>
       </ion-card-header>
       <ion-card-content>
-        <div *ngIf="offer.description" class="offer-description">
-          {{ offer.description }}
+        <div *ngIf="offer.description">
+          <!-- Text description (only show if there's actual text after removing voice memo) -->
+          <div *ngIf="parseDescription(offer.description).text && parseDescription(offer.description).text.length > 0" class="offer-description">
+            {{ parseDescription(offer.description).text }}
+          </div>
+          
+          <!-- Voice memo player -->
+          <div *ngIf="parseDescription(offer.description).voiceMemoUrl" class="voice-memo-player-card">
+            <div class="voice-memo-waveform-container">
+              <ion-button
+                fill="clear"
+                size="small"
+                (click)="playVoiceMemo(parseDescription(offer.description).voiceMemoUrl!)"
+                class="voice-memo-play-btn"
+              >
+                <ion-icon [name]="isPlayingVoiceMemo(parseDescription(offer.description).voiceMemoUrl!) ? 'pause' : 'play'" slot="icon-only"></ion-icon>
+              </ion-button>
+              <div class="voice-memo-waveform">
+                <div 
+                  *ngFor="let height of getVoiceMemoWaveform(parseDescription(offer.description).voiceMemoUrl!); let i = index" 
+                  class="waveform-bar"
+                  [style.height.px]="height"
+                  [class.playing]="isPlayingVoiceMemo(parseDescription(offer.description).voiceMemoUrl!)"
+                ></div>
+              </div>
+            </div>
+          </div>
         </div>
         
         <!-- Participant Section -->
@@ -229,6 +254,110 @@
             ></ion-textarea>
           </ion-item>
 
+          <!-- Existing Voice Memo Display (when editing) -->
+          <div *ngIf="isEditMode && editingOffer && parseDescription(editingOffer.description).voiceMemoUrl" class="voice-memo-section">
+            <ion-label class="voice-memo-label">Aktuelle Sprachnachricht</ion-label>
+            <div class="voice-memo-preview-container">
+              <ion-button
+                fill="clear"
+                size="small"
+                (click)="playVoiceMemo(parseDescription(editingOffer.description).voiceMemoUrl!)"
+                class="voice-memo-preview-btn"
+              >
+                <ion-icon [name]="isPlayingVoiceMemo(parseDescription(editingOffer.description).voiceMemoUrl!) ? 'pause' : 'play'" slot="icon-only"></ion-icon>
+              </ion-button>
+              <div class="voice-memo-waveform-preview">
+                <div 
+                  *ngFor="let height of getVoiceMemoWaveform(parseDescription(editingOffer.description).voiceMemoUrl!); let i = index" 
+                  class="waveform-bar-preview"
+                  [style.height.px]="height"
+                  [class.playing]="isPlayingVoiceMemo(parseDescription(editingOffer.description).voiceMemoUrl!)"
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Voice Memo Section -->
+          <div class="voice-memo-section">
+            <ion-label class="voice-memo-label">Sprachnachricht (optional)</ion-label>
+            
+            <div class="voice-memo-controls" *ngIf="!recordedAudioUrl">
+              <ion-button
+                *ngIf="!isRecording"
+                fill="outline"
+                color="primary"
+                (click)="startRecording()"
+                [disabled]="isLoading"
+                class="voice-memo-btn"
+              >
+                <ion-icon name="mic" slot="start"></ion-icon>
+                Aufnahme starten
+              </ion-button>
+              
+              <div *ngIf="isRecording" class="recording-indicator">
+                <div class="voice-memo-recording-preview">
+                  <div class="voice-memo-waveform-preview">
+                    <div 
+                      *ngFor="let height of waveformBars; let i = index" 
+                      class="waveform-bar-preview"
+                      [style.height.px]="height"
+                      class="recording"
+                    ></div>
+                  </div>
+                  <div class="recording-controls">
+                    <ion-button
+                      fill="solid"
+                      color="danger"
+                      (click)="stopRecording()"
+                      class="voice-memo-stop-btn"
+                    >
+                      <ion-icon name="stop" slot="icon-only"></ion-icon>
+                    </ion-button>
+                    <ion-text color="danger" class="recording-time">
+                      {{ formatRecordingTime(recordingTime) }}
+                    </ion-text>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="voice-memo-playback" *ngIf="recordedAudioUrl">
+              <div class="voice-memo-preview-container">
+                <div class="voice-memo-waveform-preview">
+                  <div 
+                    *ngFor="let height of waveformBars; let i = index" 
+                    class="waveform-bar-preview"
+                    [style.height.px]="isPlayingAudio ? height : 20"
+                    [class.playing]="isPlayingAudio"
+                    [class.recording]="isRecording"
+                  ></div>
+                </div>
+                <div class="voice-memo-preview-controls">
+                  <ion-button
+                    fill="clear"
+                    size="small"
+                    (click)="playRecordedAudio()"
+                    [disabled]="isLoading"
+                    class="voice-memo-preview-btn"
+                  >
+                    <ion-icon [name]="isPlayingAudio ? 'pause' : 'play'" slot="icon-only"></ion-icon>
+                  </ion-button>
+                  <span class="voice-memo-duration">{{ formatRecordingTime(recordingTime || 0) }}</span>
+                  <ion-button
+                    fill="clear"
+                    color="danger"
+                    (click)="deleteRecordedAudio()"
+                    [disabled]="isLoading"
+                    class="voice-memo-delete-btn"
+                    aria-label="Löschen"
+                  >
+                    <ion-icon name="trash" slot="icon-only"></ion-icon>
+                  </ion-button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <ion-text color="danger" *ngIf="errorMessage">
             <p class="error-text">{{ errorMessage }}</p>
           </ion-text>
@@ -304,7 +433,7 @@
         </ion-toolbar>
       </ion-header>
       <ion-content class="ion-padding">
-        <ion-spinner *ngIf="loadingParticipants" name="crescent"></ion-spinner>
+        <ion-spinner *ngIf="loadingParticipants" name="crescent" class="page-loading-spinner"></ion-spinner>
         
         <div *ngIf="!loadingParticipants">
           <p *ngIf="selectedOfferParticipants.length === 0" class="ion-text-center ion-margin-top">

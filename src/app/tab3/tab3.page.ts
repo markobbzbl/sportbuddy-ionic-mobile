@@ -19,7 +19,8 @@ import {
   IonCardTitle,
   IonToast,
   IonSpinner,
-  IonText
+  IonText,
+  IonToggle
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { person, camera, logOut, save, create, moon, sunny, images } from 'ionicons/icons';
@@ -57,7 +58,8 @@ import { Subscription } from 'rxjs';
     IonCardTitle,
     IonToast,
     IonSpinner,
-    IonText
+    IonText,
+    IonToggle
   ]
 })
 export class Tab3Page implements OnInit, OnDestroy {

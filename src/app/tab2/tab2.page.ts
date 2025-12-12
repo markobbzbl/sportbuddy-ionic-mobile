@@ -29,7 +29,7 @@ import {
   IonAvatar
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { create, trash, time, people, checkmarkCircle, close } from 'ionicons/icons';
+import { create, trash, time, people, checkmarkCircle, close, play, pause } from 'ionicons/icons';
 import { SupabaseService, TrainingOffer, Participant } from '../services/supabase.service';
 import { AuthService } from '../services/auth.service';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
@@ -86,6 +86,12 @@ export class Tab2Page implements OnInit, OnDestroy {
   loadingParticipants = false;
   private subscriptions: Subscription[] = [];
   private successMessageTimeout?: any;
+  
+  // Voice memo playback properties
+  playingAudioUrl: string | null = null;
+  playingAudioElement: HTMLAudioElement | null = null;
+  voiceMemoWaveforms: Map<string, number[]> = new Map();
+  waveformAnimationIntervals: Map<string, any> = new Map();
 
   sportTypes = [
     'Fußball',
@@ -107,7 +113,7 @@ export class Tab2Page implements OnInit, OnDestroy {
     private authService: AuthService,
     private fb: FormBuilder
   ) {
-    addIcons({ create, trash, time, people, checkmarkCircle, close });
+    addIcons({ create, trash, time, people, checkmarkCircle, close, play, pause });
     
     this.offerForm = this.fb.group({
       sport_type: ['', Validators.required],
@@ -165,11 +171,15 @@ export class Tab2Page implements OnInit, OnDestroy {
   openEditModal(offer: TrainingOffer) {
     this.isEditMode = true;
     this.editingOffer = offer;
+    
+    // Parse description to remove voice memo URL for editing
+    const parsedDescription = this.parseDescription(offer.description);
+    
     this.offerForm.patchValue({
       sport_type: offer.sport_type,
       location: offer.location,
       date_time: new Date(offer.date_time).toISOString().slice(0, 16),
-      description: offer.description || ''
+      description: parsedDescription.text || ''
     });
     this.isModalOpen = true;
   }
@@ -198,7 +208,19 @@ export class Tab2Page implements OnInit, OnDestroy {
         return;
       }
 
-      const formValue = this.offerForm.value;
+      let formValue = { ...this.offerForm.value };
+
+      // Preserve existing voice memo if no new one was recorded
+      if (this.isEditMode && this.editingOffer) {
+        const existingVoiceMemo = this.parseDescription(this.editingOffer.description).voiceMemoUrl;
+        if (existingVoiceMemo) {
+          // Preserve the existing voice memo by appending it to the description
+          const cleanDescription = formValue.description ? formValue.description.trim() : '';
+          formValue.description = cleanDescription 
+            ? `${cleanDescription}\n\n[Sprachnachricht: ${existingVoiceMemo}]`
+            : `[Sprachnachricht: ${existingVoiceMemo}]`;
+        }
+      }
 
       if (this.isEditMode && this.editingOffer) {
         // Update existing offer
@@ -335,5 +357,128 @@ export class Tab2Page implements OnInit, OnDestroy {
     this.successMessageTimeout = setTimeout(() => {
       this.successMessage = '';
     }, 3000);
+  }
+
+  // Parse description to extract text and voice memo URLs
+  parseDescription(description: string | undefined): { text: string; voiceMemoUrl: string | null } {
+    if (!description) return { text: '', voiceMemoUrl: null };
+    
+    const voiceMemoRegex = /\[Sprachnachricht:\s*(https?:\/\/[^\]]+)\]/gi;
+    
+    // Use exec to find all matches (compatible with older TypeScript)
+    const matches: RegExpExecArray[] = [];
+    let match: RegExpExecArray | null;
+    const regex = new RegExp(voiceMemoRegex.source, voiceMemoRegex.flags);
+    
+    while ((match = regex.exec(description)) !== null) {
+      matches.push(match);
+    }
+    
+    if (matches.length > 0) {
+      // Extract URL from the last match (most recent voice memo)
+      const lastMatch = matches[matches.length - 1];
+      const voiceMemoUrl = lastMatch[1] || null;
+      
+      // Remove ALL voice memo patterns from description
+      let text = description.replace(voiceMemoRegex, '');
+      
+      // Clean up extra whitespace and newlines
+      text = text
+        .replace(/\n\n+/g, '\n') // Replace multiple newlines with single
+        .replace(/^\s+|\s+$/g, '') // Remove leading/trailing whitespace
+        .replace(/^\n+|\n+$/g, '') // Remove leading/trailing newlines
+        .trim();
+      
+      return { text, voiceMemoUrl };
+    }
+    
+    return { text: description.trim(), voiceMemoUrl: null };
+  }
+
+  // Play voice memo from URL
+  async playVoiceMemo(url: string) {
+    try {
+      if (this.playingAudioElement && this.playingAudioUrl === url) {
+        if (!this.playingAudioElement.paused) {
+          this.playingAudioElement.pause();
+          this.playingAudioUrl = null;
+          this.playingAudioElement = null;
+          this.stopVoiceMemoWaveformAnimation(url);
+          return;
+        }
+      }
+
+      // Initialize waveform if not exists - max 30px to fit container
+      if (!this.voiceMemoWaveforms.has(url)) {
+        this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => Math.random() * 20 + 10));
+      }
+
+      this.playingAudioElement = new Audio(url);
+      this.playingAudioUrl = url;
+
+      // Start waveform animation
+      this.startVoiceMemoWaveformAnimation(url);
+
+      this.playingAudioElement.onended = () => {
+        this.playingAudioUrl = null;
+        this.playingAudioElement = null;
+        this.stopVoiceMemoWaveformAnimation(url);
+      };
+
+      this.playingAudioElement.onerror = () => {
+        this.errorMessage = 'Fehler beim Abspielen der Sprachnachricht';
+        this.playingAudioUrl = null;
+        this.playingAudioElement = null;
+        this.stopVoiceMemoWaveformAnimation(url);
+      };
+
+      await this.playingAudioElement.play();
+    } catch (error: any) {
+      console.error('Error playing voice memo:', error);
+      this.errorMessage = 'Fehler beim Abspielen der Sprachnachricht';
+      this.playingAudioUrl = null;
+      this.playingAudioElement = null;
+      this.stopVoiceMemoWaveformAnimation(url);
+    }
+  }
+
+  startVoiceMemoWaveformAnimation(url: string) {
+    const interval = setInterval(() => {
+      if (this.playingAudioUrl === url && this.playingAudioElement && !this.playingAudioElement.paused) {
+        const currentWaveform = this.voiceMemoWaveforms.get(url) || [];
+        // Max 30px to fit container
+        const newWaveform = currentWaveform.map(() => Math.random() * 20 + 10);
+        this.voiceMemoWaveforms.set(url, newWaveform);
+      } else {
+        this.stopVoiceMemoWaveformAnimation(url);
+      }
+    }, 150);
+    this.waveformAnimationIntervals.set(url, interval);
+  }
+
+  stopVoiceMemoWaveformAnimation(url: string) {
+    const interval = this.waveformAnimationIntervals.get(url);
+    if (interval) {
+      clearInterval(interval);
+      this.waveformAnimationIntervals.delete(url);
+    }
+    // Reset to static waveform - max 30px to fit container
+    if (this.voiceMemoWaveforms.has(url)) {
+      this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => 15));
+    }
+  }
+
+  getVoiceMemoWaveform(url: string): number[] {
+    if (!this.voiceMemoWaveforms.has(url)) {
+      // Default static waveform - max 30px to fit container
+      this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => 15));
+    }
+    return this.voiceMemoWaveforms.get(url) || Array.from({ length: 30 }, () => 15);
+  }
+
+  isPlayingVoiceMemo(url: string): boolean {
+    return this.playingAudioUrl === url && 
+           this.playingAudioElement !== null && 
+           this.playingAudioElement.paused === false;
   }
 }

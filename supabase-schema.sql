@@ -68,6 +68,11 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('avatars', 'avatars', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- Create storage bucket for voice memos
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('voice_memos', 'voice_memos', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- Enable Row Level Security
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.training_offers ENABLE ROW LEVEL SECURITY;
@@ -159,6 +164,22 @@ DROP POLICY IF EXISTS "Users can delete own avatar" ON storage.objects;
 CREATE POLICY "Users can delete own avatar"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+-- Storage policies for voice memos
+DROP POLICY IF EXISTS "Voice memos are publicly accessible" ON storage.objects;
+CREATE POLICY "Voice memos are publicly accessible"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'voice_memos');
+
+DROP POLICY IF EXISTS "Users can upload own voice memos" ON storage.objects;
+CREATE POLICY "Users can upload own voice memos"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'voice_memos' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+DROP POLICY IF EXISTS "Users can delete own voice memos" ON storage.objects;
+CREATE POLICY "Users can delete own voice memos"
+  ON storage.objects FOR DELETE
+  USING (bucket_id = 'voice_memos' AND auth.uid()::text = (storage.foldername(name))[1]);
 
 -- Function to automatically create profile on user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
