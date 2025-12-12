@@ -25,3 +25,8 @@ Build: Capacitor für iOS/Android
 Ziel
 
 Sportler schneller verbinden, spontane Trainings ermöglichen und den organisatorischen Aufwand minimieren.
+
+
+Start:
+- npm install
+- ionic serve (web)
