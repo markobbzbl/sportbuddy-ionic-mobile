@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Sportbuddy</string>
     <string name="title_activity_main">Sportbuddy</string>
-    <string name="package_name">app.meetmefit.sportbuddy</string>
-    <string name="custom_url_scheme">app.meetmefit.sportbuddy</string>
+    <string name="package_name">com.marko.jevtic.sportbuddy</string>
+    <string name="custom_url_scheme">com.marko.jevtic.sportbuddy</string>
 </resources>

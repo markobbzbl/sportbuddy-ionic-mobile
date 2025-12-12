@@ -219,7 +219,8 @@
             ></ion-input>
           </ion-item>
           <ion-text color="danger" *ngIf="offerForm.get('location')?.invalid && offerForm.get('location')?.touched">
-            <p class="error-text">Bitte geben Sie einen Ort ein.</p>
+            <p class="error-text" *ngIf="offerForm.get('location')?.errors?.['required']">Bitte geben Sie einen Ort ein.</p>
+            <p class="error-text" *ngIf="offerForm.get('location')?.errors?.['containsLetter']">Der Ort muss mindestens einen Buchstaben enthalten.</p>
           </ion-text>
           <ion-button
             fill="outline"

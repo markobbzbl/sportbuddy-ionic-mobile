@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "app.meetmefit.sportbuddy"
+    namespace "com.marko.jevtic.sportbuddy"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.meetmefit.sportbuddy"
+        applicationId "com.marko.jevtic.sportbuddy"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

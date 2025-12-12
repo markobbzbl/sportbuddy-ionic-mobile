@@ -1,10 +1,9 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.sportbuddy.mobile',
+  appId: 'com.marko.jevtic.sportbuddy',
   appName: 'Sportbuddy',
   webDir: 'www',
-  // Explicitly disable server URL for standalone builds
   server: {
     androidScheme: 'https'
   }

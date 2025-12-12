@@ -91,7 +91,9 @@
             ></ion-input>
           </ion-item>
           <ion-text color="danger" *ngIf="registerForm.get('firstName')?.invalid && registerForm.get('firstName')?.touched">
-            <p class="error-text">Bitte geben Sie Ihren Vornamen ein.</p>
+            <p class="error-text" *ngIf="registerForm.get('firstName')?.errors?.['required']">Bitte geben Sie Ihren Vornamen ein.</p>
+            <p class="error-text" *ngIf="registerForm.get('firstName')?.errors?.['containsLetter']">Der Vorname muss mindestens einen Buchstaben enthalten.</p>
+            <p class="error-text" *ngIf="registerForm.get('firstName')?.errors?.['lettersOnly']">Nur Buchstaben, Leerzeichen oder Bindestriche sind erlaubt.</p>
           </ion-text>
 
           <ion-item>
@@ -104,7 +106,9 @@
             ></ion-input>
           </ion-item>
           <ion-text color="danger" *ngIf="registerForm.get('lastName')?.invalid && registerForm.get('lastName')?.touched">
-            <p class="error-text">Bitte geben Sie Ihren Nachnamen ein.</p>
+            <p class="error-text" *ngIf="registerForm.get('lastName')?.errors?.['required']">Bitte geben Sie Ihren Nachnamen ein.</p>
+            <p class="error-text" *ngIf="registerForm.get('lastName')?.errors?.['containsLetter']">Der Nachname muss mindestens einen Buchstaben enthalten.</p>
+            <p class="error-text" *ngIf="registerForm.get('lastName')?.errors?.['lettersOnly']">Nur Buchstaben, Leerzeichen oder Bindestriche sind erlaubt.</p>
           </ion-text>
 
           <ion-item>

@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
+import { containsLetterValidator, lettersOnlyValidator } from '../../validators/custom-validators';
 import {
   IonContent,
   IonHeader,
@@ -71,15 +72,14 @@ export class LoginPage implements OnInit {
     });
 
     this.registerForm = this.fb.group({
-      firstName: ['', [Validators.required, Validators.minLength(1)]],
-      lastName: ['', [Validators.required, Validators.minLength(1)]],
+      firstName: ['', [Validators.required, Validators.minLength(1), containsLetterValidator(), lettersOnlyValidator()]],
+      lastName: ['', [Validators.required, Validators.minLength(1), containsLetterValidator(), lettersOnlyValidator()]],
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
   }
 
   ngOnInit() {
-    // Check if already authenticated
     if (this.authService.isAuthenticated()) {
       this.router.navigate(['/tabs/tab1']);
     }
@@ -127,7 +127,6 @@ export class LoginPage implements OnInit {
       this.router.navigate(['/tabs/tab1']);
     } catch (error: any) {
       console.error('Registration error:', error);
-      // Show more detailed error message
       if (error.message) {
         this.errorMessage = error.message;
       } else if (error.error_description) {

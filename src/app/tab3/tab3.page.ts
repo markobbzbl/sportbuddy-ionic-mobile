@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
+import { containsLetterValidator, lettersOnlyValidator } from '../validators/custom-validators';
 import {
   IonHeader,
   IonToolbar,
@@ -90,13 +91,12 @@ export class Tab3Page implements OnInit, OnDestroy {
     addIcons({ person, camera, logOut, save, create, moon, sunny, images });
 
     this.profileForm = this.fb.group({
-      first_name: ['', [Validators.required, Validators.minLength(1)]],
-      last_name: ['', [Validators.required, Validators.minLength(1)]]
+      first_name: ['', [Validators.required, Validators.minLength(1), containsLetterValidator(), lettersOnlyValidator()]],
+      last_name: ['', [Validators.required, Validators.minLength(1), containsLetterValidator(), lettersOnlyValidator()]]
     });
   }
 
   async ngOnInit() {
-    // Subscribe to online status
     const onlineSub = this.offlineService.isOnline$.subscribe(isOnline => {
       this.isOnline = isOnline;
       if (isOnline) {
@@ -110,16 +110,13 @@ export class Tab3Page implements OnInit, OnDestroy {
     });
     this.subscriptions.push(themeSub);
 
-    // Subscribe to user changes to clear profile when user changes
     const userSub = this.authService.currentUser$.subscribe(user => {
       if (!user) {
-        // User logged out - clear profile state
         this.profile = null;
         this.avatarUrl = null;
         this.userEmail = '';
         this.profileForm.reset();
       } else {
-        // User changed - reload profile
         this.loadProfile();
       }
     });
@@ -137,11 +134,9 @@ export class Tab3Page implements OnInit, OnDestroy {
 
   private setSuccessMessage(message: string) {
     this.successMessage = message;
-    // Clear any existing timeout
     if (this.successMessageTimeout) {
       clearTimeout(this.successMessageTimeout);
     }
-    // Auto-dismiss after 3 seconds
     this.successMessageTimeout = setTimeout(() => {
       this.successMessage = '';
     }, 3000);
@@ -158,7 +153,6 @@ export class Tab3Page implements OnInit, OnDestroy {
 
     this.isLoading = true;
     try {
-      // Try to load from server if online
       if (this.isOnline) {
         try {
           const profile = await this.supabase.getProfile(user.id);
@@ -169,20 +163,16 @@ export class Tab3Page implements OnInit, OnDestroy {
               first_name: profile.first_name || '',
               last_name: profile.last_name || ''
             });
-            // Store offline
             await this.storage.set('offline_profile', profile);
             return;
           }
         } catch (error: any) {
-          // If online but request failed, fall through to offline loading
           console.error('Error loading profile from server:', error);
         }
       }
 
-      // Load from offline storage, but ONLY if it belongs to the current user
       const offlineProfile = await this.storage.get<Profile>('offline_profile');
       if (offlineProfile && offlineProfile.id === user.id) {
-        // Only use offline profile if it belongs to the current user
         this.profile = offlineProfile;
         this.avatarUrl = offlineProfile.avatar_url || null;
         this.profileForm.patchValue({
@@ -190,11 +180,9 @@ export class Tab3Page implements OnInit, OnDestroy {
           last_name: offlineProfile.last_name || ''
         });
       } else {
-        // Profile doesn't belong to current user or doesn't exist - clear it
         if (offlineProfile && offlineProfile.id !== user.id) {
           await this.storage.remove('offline_profile');
         }
-        // No profile found, create empty one
         this.profile = {
           id: user.id,
           first_name: '',
@@ -205,11 +193,9 @@ export class Tab3Page implements OnInit, OnDestroy {
       }
     } catch (error: any) {
       console.error('Error loading profile:', error);
-      // Try offline storage as last resort, but ONLY if it belongs to the current user
       try {
         const offlineProfile = await this.storage.get<Profile>('offline_profile');
         if (offlineProfile && offlineProfile.id === user.id) {
-          // Only use offline profile if it belongs to the current user
           this.profile = offlineProfile;
           this.avatarUrl = offlineProfile.avatar_url || null;
           this.profileForm.patchValue({
@@ -217,7 +203,6 @@ export class Tab3Page implements OnInit, OnDestroy {
             last_name: offlineProfile.last_name || ''
           });
         } else if (offlineProfile && offlineProfile.id !== user.id) {
-          // Profile doesn't belong to current user - clear it
           await this.storage.remove('offline_profile');
         }
       } catch (storageError) {
@@ -274,7 +259,6 @@ export class Tab3Page implements OnInit, OnDestroy {
 
     this.isLoading = true;
     try {
-      // Convert data URL to blob
       const response = await fetch(dataUrl);
       const blob = await response.blob();
       const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
@@ -285,11 +269,9 @@ export class Tab3Page implements OnInit, OnDestroy {
           if (error) throw error;
 
           if (data?.publicUrl) {
-            // Update profile with new avatar URL
             const { data: updatedProfile, error: updateError } = await this.supabase.updateProfile(user.id, { avatar_url: data.publicUrl });
             if (updateError) throw updateError;
             
-            // Update local state immediately
             if (updatedProfile) {
               this.profile = updatedProfile;
               this.avatarUrl = updatedProfile.avatar_url || data.publicUrl;
@@ -299,13 +281,10 @@ export class Tab3Page implements OnInit, OnDestroy {
             }
             
             this.setSuccessMessage('Profilbild erfolgreich aktualisiert');
-            // Reload profile to ensure everything is in sync
             await this.loadProfile();
           }
         } catch (error: any) {
-          // If online but failed, save locally and queue
           if (!this.isOnline || error.message?.includes('network') || error.message?.includes('fetch')) {
-            // Save avatar URL locally
             this.avatarUrl = dataUrl;
             await this.queueService.addOperation({
               type: 'update',
@@ -318,7 +297,6 @@ export class Tab3Page implements OnInit, OnDestroy {
           }
         }
       } else {
-        // Offline: save locally and queue
         this.avatarUrl = dataUrl;
         await this.queueService.addOperation({
           type: 'update',
@@ -361,7 +339,6 @@ export class Tab3Page implements OnInit, OnDestroy {
       const profileUpdates = this.profileForm.value;
 
       if (this.isOnline) {
-        // Online: try to update directly
         try {
           const { data, error } = await this.supabase.updateProfile(user.id, profileUpdates);
           if (error) throw error;
@@ -373,14 +350,12 @@ export class Tab3Page implements OnInit, OnDestroy {
             this.isEditing = false;
           }
         } catch (error: any) {
-          // If online but failed, queue it
           if (!this.isOnline || error.message?.includes('network') || error.message?.includes('fetch')) {
             await this.queueService.addOperation({
               type: 'update',
               entity: 'profile',
               data: profileUpdates
             });
-            // Update local profile immediately
             this.profile = { ...this.profile!, ...profileUpdates };
             await this.storage.set('offline_profile', this.profile);
             this.setSuccessMessage('Profil wird synchronisiert, sobald Sie online sind');
@@ -390,13 +365,11 @@ export class Tab3Page implements OnInit, OnDestroy {
           }
         }
       } else {
-        // Offline: queue the update
         await this.queueService.addOperation({
           type: 'update',
           entity: 'profile',
           data: profileUpdates
         });
-        // Update local profile immediately
         this.profile = { ...this.profile!, ...profileUpdates };
         await this.storage.set('offline_profile', this.profile);
         this.successMessage = 'Profil wird synchronisiert, sobald Sie online sind';
@@ -416,7 +389,6 @@ export class Tab3Page implements OnInit, OnDestroy {
 
     this.isLoading = true;
     try {
-      // Clear local profile state before signing out
       this.profile = null;
       this.avatarUrl = null;
       this.userEmail = '';

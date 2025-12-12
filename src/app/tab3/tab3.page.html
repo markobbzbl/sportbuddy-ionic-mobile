@@ -69,7 +69,9 @@
             ></ion-input>
           </ion-item>
           <ion-text color="danger" *ngIf="profileForm.get('first_name')?.invalid && profileForm.get('first_name')?.touched">
-            <p class="error-text">Bitte geben Sie Ihren Vornamen ein.</p>
+            <p class="error-text" *ngIf="profileForm.get('first_name')?.errors?.['required']">Bitte geben Sie Ihren Vornamen ein.</p>
+            <p class="error-text" *ngIf="profileForm.get('first_name')?.errors?.['containsLetter']">Der Vorname muss mindestens einen Buchstaben enthalten.</p>
+            <p class="error-text" *ngIf="profileForm.get('first_name')?.errors?.['lettersOnly']">Nur Buchstaben, Leerzeichen oder Bindestriche sind erlaubt.</p>
           </ion-text>
 
           <ion-item>
@@ -81,7 +83,9 @@
             ></ion-input>
           </ion-item>
           <ion-text color="danger" *ngIf="profileForm.get('last_name')?.invalid && profileForm.get('last_name')?.touched">
-            <p class="error-text">Bitte geben Sie Ihren Nachnamen ein.</p>
+            <p class="error-text" *ngIf="profileForm.get('last_name')?.errors?.['required']">Bitte geben Sie Ihren Nachnamen ein.</p>
+            <p class="error-text" *ngIf="profileForm.get('last_name')?.errors?.['containsLetter']">Der Nachname muss mindestens einen Buchstaben enthalten.</p>
+            <p class="error-text" *ngIf="profileForm.get('last_name')?.errors?.['lettersOnly']">Nur Buchstaben, Leerzeichen oder Bindestriche sind erlaubt.</p>
           </ion-text>
 
           <ion-button

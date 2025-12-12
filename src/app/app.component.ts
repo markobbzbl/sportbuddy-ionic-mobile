@@ -18,12 +18,7 @@ export class AppComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    // Theme is initialized in ThemeService constructor
-    // SyncService will automatically sync when coming online
-    
-    // Ensure dark mode is applied globally when it changes
     this.themeSubscription = this.themeService.darkMode$.subscribe(isDark => {
-      // Apply immediately using requestAnimationFrame for DOM readiness
       requestAnimationFrame(() => {
         const ionApp = document.querySelector('ion-app');
         if (ionApp) {
@@ -44,7 +39,6 @@ export class AppComponent implements OnInit, OnDestroy {
       });
     });
     
-    // Also ensure initial theme is applied after view init
     setTimeout(() => {
       const isDark = this.themeService.isDarkMode();
       const ionApp = document.querySelector('ion-app');

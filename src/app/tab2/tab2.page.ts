@@ -34,6 +34,7 @@ import { SupabaseService, TrainingOffer, Participant } from '../services/supabas
 import { AuthService } from '../services/auth.service';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
+import { containsLetterValidator } from '../validators/custom-validators';
 
 @Component({
   selector: 'app-tab2',
@@ -87,7 +88,6 @@ export class Tab2Page implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
   private successMessageTimeout?: any;
   
-  // Voice memo playback properties
   playingAudioUrl: string | null = null;
   playingAudioElement: HTMLAudioElement | null = null;
   voiceMemoWaveforms: Map<string, number[]> = new Map();
@@ -117,7 +117,7 @@ export class Tab2Page implements OnInit, OnDestroy {
     
     this.offerForm = this.fb.group({
       sport_type: ['', Validators.required],
-      location: ['', Validators.required],
+      location: ['', [Validators.required, containsLetterValidator()]],
       date_time: ['', Validators.required],
       description: ['']
     });
@@ -150,9 +150,7 @@ export class Tab2Page implements OnInit, OnDestroy {
       if (error) throw error;
 
       if (data) {
-        // Filter to show only current user's offers
         this.myOffers = data.filter(offer => offer.user_id === user.id);
-        // Sort by date (upcoming first)
         this.myOffers.sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime());
       }
     } catch (error: any) {
@@ -172,7 +170,6 @@ export class Tab2Page implements OnInit, OnDestroy {
     this.isEditMode = true;
     this.editingOffer = offer;
     
-    // Parse description to remove voice memo URL for editing
     const parsedDescription = this.parseDescription(offer.description);
     
     this.offerForm.patchValue({
@@ -210,11 +207,9 @@ export class Tab2Page implements OnInit, OnDestroy {
 
       let formValue = { ...this.offerForm.value };
 
-      // Preserve existing voice memo if no new one was recorded
       if (this.isEditMode && this.editingOffer) {
         const existingVoiceMemo = this.parseDescription(this.editingOffer.description).voiceMemoUrl;
         if (existingVoiceMemo) {
-          // Preserve the existing voice memo by appending it to the description
           const cleanDescription = formValue.description ? formValue.description.trim() : '';
           formValue.description = cleanDescription 
             ? `${cleanDescription}\n\n[Sprachnachricht: ${existingVoiceMemo}]`
@@ -223,7 +218,6 @@ export class Tab2Page implements OnInit, OnDestroy {
       }
 
       if (this.isEditMode && this.editingOffer) {
-        // Update existing offer
         const { error } = await this.supabase.updateTrainingOffer(
           this.editingOffer.id,
           {
@@ -279,7 +273,6 @@ export class Tab2Page implements OnInit, OnDestroy {
       const { data, error } = await this.supabase.getTrainingOfferParticipants(offer.id, 10);
       if (error) throw error;
 
-      // Transform data to match Participant interface (profiles is returned as array from Supabase)
       this.selectedOfferParticipants = (data || []).map((p: any) => ({
         id: p.id,
         user_id: p.user_id,
@@ -359,13 +352,11 @@ export class Tab2Page implements OnInit, OnDestroy {
     }, 3000);
   }
 
-  // Parse description to extract text and voice memo URLs
   parseDescription(description: string | undefined): { text: string; voiceMemoUrl: string | null } {
     if (!description) return { text: '', voiceMemoUrl: null };
     
     const voiceMemoRegex = /\[Sprachnachricht:\s*(https?:\/\/[^\]]+)\]/gi;
     
-    // Use exec to find all matches (compatible with older TypeScript)
     const matches: RegExpExecArray[] = [];
     let match: RegExpExecArray | null;
     const regex = new RegExp(voiceMemoRegex.source, voiceMemoRegex.flags);
@@ -375,14 +366,11 @@ export class Tab2Page implements OnInit, OnDestroy {
     }
     
     if (matches.length > 0) {
-      // Extract URL from the last match (most recent voice memo)
       const lastMatch = matches[matches.length - 1];
       const voiceMemoUrl = lastMatch[1] || null;
       
-      // Remove ALL voice memo patterns from description
       let text = description.replace(voiceMemoRegex, '');
       
-      // Clean up extra whitespace and newlines
       text = text
         .replace(/\n\n+/g, '\n') // Replace multiple newlines with single
         .replace(/^\s+|\s+$/g, '') // Remove leading/trailing whitespace
@@ -395,7 +383,6 @@ export class Tab2Page implements OnInit, OnDestroy {
     return { text: description.trim(), voiceMemoUrl: null };
   }
 
-  // Play voice memo from URL
   async playVoiceMemo(url: string) {
     try {
       if (this.playingAudioElement && this.playingAudioUrl === url) {
@@ -408,7 +395,6 @@ export class Tab2Page implements OnInit, OnDestroy {
         }
       }
 
-      // Initialize waveform if not exists - max 30px to fit container
       if (!this.voiceMemoWaveforms.has(url)) {
         this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => Math.random() * 20 + 10));
       }
@@ -416,7 +402,6 @@ export class Tab2Page implements OnInit, OnDestroy {
       this.playingAudioElement = new Audio(url);
       this.playingAudioUrl = url;
 
-      // Start waveform animation
       this.startVoiceMemoWaveformAnimation(url);
 
       this.playingAudioElement.onended = () => {
@@ -446,7 +431,6 @@ export class Tab2Page implements OnInit, OnDestroy {
     const interval = setInterval(() => {
       if (this.playingAudioUrl === url && this.playingAudioElement && !this.playingAudioElement.paused) {
         const currentWaveform = this.voiceMemoWaveforms.get(url) || [];
-        // Max 30px to fit container
         const newWaveform = currentWaveform.map(() => Math.random() * 20 + 10);
         this.voiceMemoWaveforms.set(url, newWaveform);
       } else {
@@ -462,7 +446,6 @@ export class Tab2Page implements OnInit, OnDestroy {
       clearInterval(interval);
       this.waveformAnimationIntervals.delete(url);
     }
-    // Reset to static waveform - max 30px to fit container
     if (this.voiceMemoWaveforms.has(url)) {
       this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => 15));
     }
@@ -470,7 +453,6 @@ export class Tab2Page implements OnInit, OnDestroy {
 
   getVoiceMemoWaveform(url: string): number[] {
     if (!this.voiceMemoWaveforms.has(url)) {
-      // Default static waveform - max 30px to fit container
       this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => 15));
     }
     return this.voiceMemoWaveforms.get(url) || Array.from({ length: 30 }, () => 15);

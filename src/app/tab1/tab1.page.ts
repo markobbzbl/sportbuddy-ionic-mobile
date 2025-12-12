@@ -44,6 +44,7 @@ import { QueueService } from '../services/queue.service';
 import { SyncService } from '../services/sync.service';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
+import { containsLetterValidator } from '../validators/custom-validators';
 
 @Component({
   selector: 'app-tab1',
@@ -106,14 +107,12 @@ export class Tab1Page implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
   private successMessageTimeout?: any;
   
-  // Geolocation properties
   mapModalOpen = false;
   selectedLatitude: number | null = null;
   selectedLongitude: number | null = null;
   selectedAddress: string = '';
   isGettingLocation = false;
 
-  // Voice memo properties
   isRecording = false;
   recordingTime = 0;
   recordingInterval: any = null;
@@ -155,31 +154,27 @@ export class Tab1Page implements OnInit, OnDestroy {
 
     this.offerForm = this.fb.group({
       sport_type: ['', Validators.required],
-      location: ['', Validators.required],
+      location: ['', [Validators.required, containsLetterValidator()]],
       date_time: ['', Validators.required],
       description: ['']
     });
   }
 
   async ngOnInit() {
-    // Initialize online status immediately
     this.isOnline = this.offlineService.isOnline;
     console.log('Initial online status:', this.isOnline);
 
-    // Subscribe to online status - this will update immediately when WiFi is turned off
     const onlineSub = this.offlineService.isOnline$.subscribe(isOnline => {
       console.log('Online status changed:', isOnline);
       this.isOnline = isOnline;
       if (isOnline) {
         this.syncService.syncQueue();
       } else {
-        // When going offline, reload from storage to show offline-created items
         this.loadTrainingOffers();
       }
     });
     this.subscriptions.push(onlineSub);
 
-    // Subscribe to sync completion to reload data
     const syncSub = this.syncService.syncComplete$.subscribe(synced => {
       if (synced) {
         this.loadTrainingOffers();
@@ -187,14 +182,12 @@ export class Tab1Page implements OnInit, OnDestroy {
     });
     this.subscriptions.push(syncSub);
 
-    // Subscribe to queue changes
     const queueSub = this.queueService.queue$.subscribe(queue => {
       this.queueCount = queue.length;
     });
     this.subscriptions.push(queueSub);
 
     await this.loadTrainingOffers();
-    // Initialize filteredOffers with all offers
     this.filteredOffers = [...this.trainingOffers];
   }
 
@@ -207,11 +200,9 @@ export class Tab1Page implements OnInit, OnDestroy {
 
   private setSuccessMessage(message: string) {
     this.successMessage = message;
-    // Clear any existing timeout
     if (this.successMessageTimeout) {
       clearTimeout(this.successMessageTimeout);
     }
-    // Auto-dismiss after 3 seconds
     this.successMessageTimeout = setTimeout(() => {
       this.successMessage = '';
     }, 3000);
@@ -222,18 +213,15 @@ export class Tab1Page implements OnInit, OnDestroy {
     this.errorMessage = '';
     
     try {
-      // Always try to load from server first if online
       if (this.isOnline) {
         try {
           const { data, error } = await this.supabase.getTrainingOffers();
           if (error) throw error;
 
           if (data) {
-            // Ensure profiles are loaded for all offers
             const currentUser = this.authService.getCurrentUser();
             const currentProfile = this.authService.getCurrentProfile();
             
-            // If any offer is missing profile data and it's the current user's offer, add it
             let serverOffers = data.map(offer => {
               if (!offer.profiles && currentUser && offer.user_id === currentUser.id && currentProfile) {
                 return { ...offer, profiles: currentProfile };
@@ -241,10 +229,8 @@ export class Tab1Page implements OnInit, OnDestroy {
               return offer;
             });
 
-            // Merge with offline-created offers (those with temp IDs)
             const offlineCreated = await this.storage.get<TrainingOffer[]>('offline_created_offers') || [];
             
-            // Combine: server offers + offline created offers (filter out any that might have been synced)
             const serverOfferIds = new Set(serverOffers.map(o => o.id));
             const offlineOnly = offlineCreated.filter(o => o.id.startsWith('temp_') && !serverOfferIds.has(o.id));
             
@@ -252,30 +238,23 @@ export class Tab1Page implements OnInit, OnDestroy {
               return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             });
             
-            // Store combined list for offline use
             await this.storage.set('offline_training_offers', this.trainingOffers);
-            // Keep offline-created offers separate
             await this.storage.set('offline_created_offers', offlineOnly);
             
-            // Apply filters after loading
             this.applyFilters();
             
-            return; // Success, exit early
+            return;
           }
         } catch (error: any) {
-          // If online but request failed, fall through to offline loading
           console.error('Error loading from server:', error);
-          // Don't throw, fall through to offline loading
         }
       }
       
-      // Load from offline storage (either offline mode or server failed)
       const offlineOffers = await this.storage.get<TrainingOffer[]>('offline_training_offers') || [];
       const offlineCreated = await this.storage.get<TrainingOffer[]>('offline_created_offers') || [];
       
       console.log('Loading offline offers:', { offlineOffers: offlineOffers.length, offlineCreated: offlineCreated.length });
       
-      // Merge offline offers
       const offlineOfferIds = new Set(offlineOffers.map(o => o.id));
       const allOfflineCreated = offlineCreated.filter(o => !offlineOfferIds.has(o.id));
       
@@ -285,7 +264,6 @@ export class Tab1Page implements OnInit, OnDestroy {
       
       console.log('Final training offers:', this.trainingOffers.length, this.trainingOffers.map(o => ({ id: o.id, sport: o.sport_type, isOffline: this.isOfflineOffer(o) })));
       
-      // Apply filters after loading
       this.applyFilters();
       
       if (this.trainingOffers.length > 0) {
@@ -295,7 +273,6 @@ export class Tab1Page implements OnInit, OnDestroy {
       }
     } catch (error: any) {
       console.error('Error loading training offers:', error);
-      // Last resort: try to load from storage
       try {
         const offlineOffers = await this.storage.get<TrainingOffer[]>('offline_training_offers') || [];
         this.trainingOffers = offlineOffers;
@@ -309,7 +286,6 @@ export class Tab1Page implements OnInit, OnDestroy {
       }
     } finally {
       this.isLoading = false;
-      // Apply filters after loading completes
       this.applyFilters();
     }
   }
@@ -317,12 +293,10 @@ export class Tab1Page implements OnInit, OnDestroy {
   applyFilters() {
     let filtered = [...this.trainingOffers];
 
-    // Filter by sport type
     if (this.sportTypeFilter) {
       filtered = filtered.filter(offer => offer.sport_type === this.sportTypeFilter);
     }
 
-    // Filter by name (username)
     if (this.nameFilter && this.nameFilter.trim()) {
       const searchTerm = this.nameFilter.trim().toLowerCase();
       filtered = filtered.filter(offer => {
@@ -369,23 +343,19 @@ export class Tab1Page implements OnInit, OnDestroy {
 
   async startRecording() {
     try {
-      // Request permissions
       const permissionResult = await VoiceRecorder.requestAudioRecordingPermission();
       if (!permissionResult.value) {
         this.errorMessage = 'Mikrofon-Berechtigung wurde nicht erteilt';
         return;
       }
 
-      // Start recording
       await VoiceRecorder.startRecording();
       this.isRecording = true;
       this.recordingTime = 0;
       this.generateWaveformBars();
       
-      // Start timer
       this.recordingInterval = setInterval(() => {
         this.recordingTime++;
-        // Update waveform during recording
         this.updateWaveformBars();
       }, 1000);
     } catch (error: any) {
@@ -396,12 +366,10 @@ export class Tab1Page implements OnInit, OnDestroy {
   }
 
   generateWaveformBars() {
-    // Generate random heights for waveform bars (simulating audio levels) - max 30px to fit container
     this.waveformBars = Array.from({ length: 30 }, () => Math.random() * 25 + 10);
   }
 
   updateWaveformBars() {
-    // Update waveform bars with new random values during recording - max 30px to fit container
     if (this.isRecording) {
       this.waveformBars = this.waveformBars.map(() => Math.random() * 25 + 10);
     }
@@ -414,11 +382,9 @@ export class Tab1Page implements OnInit, OnDestroy {
       const result = await VoiceRecorder.stopRecording();
       
       if (result.value && result.value.recordDataBase64) {
-        // Convert base64 to blob
         const base64Data = result.value.recordDataBase64;
         const mimeType = result.value.mimeType || 'audio/m4a';
         
-        // Convert base64 to blob
         const byteCharacters = atob(base64Data);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -427,7 +393,6 @@ export class Tab1Page implements OnInit, OnDestroy {
         const byteArray = new Uint8Array(byteNumbers);
         this.recordedAudioBlob = new Blob([byteArray], { type: mimeType });
         
-        // Create URL for playback
         this.recordedAudioUrl = URL.createObjectURL(this.recordedAudioBlob);
       }
 
@@ -452,7 +417,6 @@ export class Tab1Page implements OnInit, OnDestroy {
 
     try {
       if (this.audioPlayer) {
-        // If already playing, pause it
         if (!this.audioPlayer.paused) {
           this.audioPlayer.pause();
           this.isPlayingAudio = false;
@@ -463,7 +427,6 @@ export class Tab1Page implements OnInit, OnDestroy {
       this.audioPlayer = new Audio(this.recordedAudioUrl);
       this.isPlayingAudio = true;
 
-      // Animate waveform during playback
       this.animateWaveformDuringPlayback();
 
       this.audioPlayer.onended = () => {
@@ -500,7 +463,6 @@ export class Tab1Page implements OnInit, OnDestroy {
   }
 
   stopWaveformAnimation() {
-    // Reset waveform to static state
     if (this.recordedAudioUrl) {
       this.generateWaveformBars();
     }
@@ -537,15 +499,11 @@ export class Tab1Page implements OnInit, OnDestroy {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
-  // Parse description to extract text and voice memo URLs
   parseDescription(description: string | undefined): { text: string; voiceMemoUrl: string | null } {
     if (!description) return { text: '', voiceMemoUrl: null };
     
-    // More robust regex to match voice memo pattern - handles any whitespace, newlines, etc.
-    // Pattern: [Sprachnachricht: URL] with flexible spacing
     const voiceMemoRegex = /\[Sprachnachricht:\s*(https?:\/\/[^\]]+)\]/gi;
     
-    // Use exec to find all matches (compatible with older TypeScript)
     const matches: RegExpExecArray[] = [];
     let match: RegExpExecArray | null;
     const regex = new RegExp(voiceMemoRegex.source, voiceMemoRegex.flags);
@@ -555,18 +513,15 @@ export class Tab1Page implements OnInit, OnDestroy {
     }
     
     if (matches.length > 0) {
-      // Extract URL from the last match (most recent voice memo)
       const lastMatch = matches[matches.length - 1];
       const voiceMemoUrl = lastMatch[1] || null;
       
-      // Remove ALL voice memo patterns from description
       let text = description.replace(voiceMemoRegex, '');
       
-      // Clean up extra whitespace and newlines
       text = text
-        .replace(/\n\n+/g, '\n') // Replace multiple newlines with single
-        .replace(/^\s+|\s+$/g, '') // Remove leading/trailing whitespace
-        .replace(/^\n+|\n+$/g, '') // Remove leading/trailing newlines
+        .replace(/\n\n+/g, '\n')
+        .replace(/^\s+|\s+$/g, '')
+        .replace(/^\n+|\n+$/g, '')
         .trim();
       
       return { text, voiceMemoUrl };
@@ -575,7 +530,6 @@ export class Tab1Page implements OnInit, OnDestroy {
     return { text: description.trim(), voiceMemoUrl: null };
   }
 
-  // Play voice memo from URL
   async playVoiceMemo(url: string) {
     try {
       if (this.playingAudioElement && this.playingAudioUrl === url) {
@@ -588,7 +542,6 @@ export class Tab1Page implements OnInit, OnDestroy {
         }
       }
 
-      // Initialize waveform if not exists - max 30px to fit container
       if (!this.voiceMemoWaveforms.has(url)) {
         this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => Math.random() * 20 + 10));
       }
@@ -596,7 +549,6 @@ export class Tab1Page implements OnInit, OnDestroy {
       this.playingAudioElement = new Audio(url);
       this.playingAudioUrl = url;
 
-      // Start waveform animation
       this.startVoiceMemoWaveformAnimation(url);
 
       this.playingAudioElement.onended = () => {
@@ -626,7 +578,6 @@ export class Tab1Page implements OnInit, OnDestroy {
     const interval = setInterval(() => {
       if (this.playingAudioUrl === url && this.playingAudioElement && !this.playingAudioElement.paused) {
         const currentWaveform = this.voiceMemoWaveforms.get(url) || [];
-        // Max 30px to fit container
         const newWaveform = currentWaveform.map(() => Math.random() * 20 + 10);
         this.voiceMemoWaveforms.set(url, newWaveform);
       } else {
@@ -642,7 +593,6 @@ export class Tab1Page implements OnInit, OnDestroy {
       clearInterval(interval);
       this.waveformAnimationIntervals.delete(url);
     }
-    // Reset to static waveform - max 30px to fit container
     if (this.voiceMemoWaveforms.has(url)) {
       this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => 15));
     }
@@ -650,7 +600,6 @@ export class Tab1Page implements OnInit, OnDestroy {
 
   getVoiceMemoWaveform(url: string): number[] {
     if (!this.voiceMemoWaveforms.has(url)) {
-      // Default static waveform - max 30px to fit container
       this.voiceMemoWaveforms.set(url, Array.from({ length: 30 }, () => 15));
     }
     return this.voiceMemoWaveforms.get(url) || Array.from({ length: 30 }, () => 15);
@@ -683,19 +632,17 @@ export class Tab1Page implements OnInit, OnDestroy {
 
       let formValue = { ...this.offerForm.value };
 
-      // Check if we need to show confirmation dialog for voice memo replacement
       if (this.isEditMode && this.editingOffer && this.recordedAudioBlob) {
         const existingVoiceMemo = this.parseDescription(this.editingOffer.description).voiceMemoUrl;
         if (existingVoiceMemo) {
           const confirmed = confirm('Möchten Sie wirklich die Sprachnachricht ersetzen? Die alte Aufnahme wird überschrieben.');
           if (!confirmed) {
             this.isLoading = false;
-            return; // User cancelled
+            return;
           }
         }
       }
 
-      // Handle voice memo upload if recorded
       if (this.recordedAudioBlob && this.isOnline) {
         try {
           const fileName = `voice-${Date.now()}.m4a`;
@@ -704,33 +651,22 @@ export class Tab1Page implements OnInit, OnDestroy {
           
           if (uploadError) {
             console.error('Error uploading voice memo:', uploadError);
-            // Continue without voice memo if upload fails
           } else if (uploadData?.publicUrl) {
-            // Remove any existing voice memo URL from description and add new one
-            // Match pattern with any whitespace/newlines
             const voiceMemoRegex = /\[Sprachnachricht:\s*https?:\/\/[^\]]+\]/gi;
             let cleanDescription = formValue.description ? formValue.description.replace(voiceMemoRegex, '') : '';
-            // Clean up extra newlines
             cleanDescription = cleanDescription.replace(/\n\n+/g, '\n').replace(/^\n+|\n+$/g, '').trim();
-            // Add new voice memo URL at the end
             formValue.description = cleanDescription 
               ? `${cleanDescription}\n\n[Sprachnachricht: ${uploadData.publicUrl}]`
               : `[Sprachnachricht: ${uploadData.publicUrl}]`;
           }
         } catch (error: any) {
           console.error('Error processing voice memo:', error);
-          // Continue without voice memo if processing fails
         }
       } else if (this.recordedAudioBlob && !this.isOnline) {
-        // Offline: store blob reference for later upload
-        // For now, we'll just note that there's a voice memo to upload later
-        // This could be enhanced to store the blob in IndexedDB
         console.log('Voice memo recorded offline, will need to upload when online');
       } else if (this.isEditMode && this.editingOffer && !this.recordedAudioBlob) {
-        // No new voice memo recorded, preserve existing one if it exists
         const existingVoiceMemo = this.parseDescription(this.editingOffer.description).voiceMemoUrl;
         if (existingVoiceMemo) {
-          // Preserve the existing voice memo by appending it to the description
           const cleanDescription = formValue.description ? formValue.description.trim() : '';
           formValue.description = cleanDescription 
             ? `${cleanDescription}\n\n[Sprachnachricht: ${existingVoiceMemo}]`
@@ -739,9 +675,7 @@ export class Tab1Page implements OnInit, OnDestroy {
       }
 
       if (this.isEditMode && this.editingOffer) {
-        // Update existing offer
         if (this.isOnline) {
-          // Online: try to update directly
           try {
             const { error } = await this.supabase.updateTrainingOffer(
               this.editingOffer.id,
@@ -750,7 +684,6 @@ export class Tab1Page implements OnInit, OnDestroy {
             if (error) throw error;
             this.setSuccessMessage('Trainingsangebot erfolgreich aktualisiert');
           } catch (error: any) {
-            // If online but failed, queue it
             if (!this.isOnline || error.message?.includes('network') || error.message?.includes('fetch')) {
               if (!this.editingOffer) return;
               
@@ -760,22 +693,18 @@ export class Tab1Page implements OnInit, OnDestroy {
                 data: { id: this.editingOffer.id, updates: formValue }
               });
               
-              // Update local display immediately
               const updatedOffer: TrainingOffer = {
                 ...this.editingOffer,
                 ...formValue,
                 updated_at: new Date().toISOString()
               };
               
-              // Update in the list
               this.trainingOffers = this.trainingOffers.map(o => 
                 o.id === this.editingOffer!.id ? updatedOffer : o
               );
               
-              // Update storage
               await this.storage.set('offline_training_offers', this.trainingOffers);
               
-              // If it's an offline-created offer, update it in offline_created_offers too
               if (this.editingOffer.id.startsWith('temp_')) {
                 const offlineCreated = await this.storage.get<TrainingOffer[]>('offline_created_offers') || [];
                 const updatedOfflineCreated = offlineCreated.map(o => 
@@ -790,32 +719,27 @@ export class Tab1Page implements OnInit, OnDestroy {
             }
           }
         } else {
-          // Offline: queue the update
           if (!this.editingOffer) return;
           
           await this.queueService.addOperation({
             type: 'update',
             entity: 'training_offer',
-            data: { id: this.editingOffer.id, updates: formValue }
-          });
-          
-          // Update local display immediately
-          const updatedOffer: TrainingOffer = {
-            ...this.editingOffer,
-            ...formValue,
-            updated_at: new Date().toISOString()
-          };
-          
-          // Update in the list
-          this.trainingOffers = this.trainingOffers.map(o => 
-            o.id === this.editingOffer!.id ? updatedOffer : o
-          );
-          
-          // Update storage
-          await this.storage.set('offline_training_offers', this.trainingOffers);
-          
-          // If it's an offline-created offer, update it in offline_created_offers too
-          if (this.editingOffer.id.startsWith('temp_')) {
+                data: { id: this.editingOffer.id, updates: formValue }
+              });
+              
+              const updatedOffer: TrainingOffer = {
+                ...this.editingOffer,
+                ...formValue,
+                updated_at: new Date().toISOString()
+              };
+              
+              this.trainingOffers = this.trainingOffers.map(o => 
+                o.id === this.editingOffer!.id ? updatedOffer : o
+              );
+              
+              await this.storage.set('offline_training_offers', this.trainingOffers);
+              
+              if (this.editingOffer.id.startsWith('temp_')) {
             const offlineCreated = await this.storage.get<TrainingOffer[]>('offline_created_offers') || [];
             const updatedOfflineCreated = offlineCreated.map(o => 
               o.id === this.editingOffer!.id ? updatedOffer : o
@@ -826,9 +750,7 @@ export class Tab1Page implements OnInit, OnDestroy {
           this.setSuccessMessage('Trainingsangebot wird synchronisiert, sobald Sie online sind');
         }
       } else {
-        // Create new offer
         if (this.isOnline) {
-          // Online: try to create directly
           try {
             const { error } = await this.supabase.createTrainingOffer({
               user_id: user.id,
@@ -837,7 +759,6 @@ export class Tab1Page implements OnInit, OnDestroy {
             if (error) throw error;
             this.setSuccessMessage('Trainingsangebot erfolgreich erstellt');
           } catch (error: any) {
-            // If online but failed, queue it
             if (!this.isOnline || error.message?.includes('network') || error.message?.includes('fetch')) {
               await this.queueService.addOperation({
                 type: 'create',
@@ -850,7 +771,6 @@ export class Tab1Page implements OnInit, OnDestroy {
             }
           }
         } else {
-          // Offline: queue the create
           const tempId = `temp_${Date.now()}`;
           await this.queueService.addOperation({
             type: 'create',
@@ -859,7 +779,6 @@ export class Tab1Page implements OnInit, OnDestroy {
           });
           this.setSuccessMessage('Trainingsangebot wird synchronisiert, sobald Sie online sind');
           
-          // Add to local display immediately
           const currentProfile = this.authService.getCurrentProfile();
           const newOffer: TrainingOffer = {
             id: tempId,
@@ -873,34 +792,25 @@ export class Tab1Page implements OnInit, OnDestroy {
             profiles: currentProfile || undefined
           };
           
-          // Add to offline-created offers storage
           const offlineCreated = await this.storage.get<TrainingOffer[]>('offline_created_offers') || [];
           offlineCreated.push(newOffer);
           await this.storage.set('offline_created_offers', offlineCreated);
           
-          // Update display immediately - add to beginning of list
           this.trainingOffers = [newOffer, ...this.trainingOffers].sort((a, b) => {
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
           });
           
-          // Also update main offline storage
           await this.storage.set('offline_training_offers', this.trainingOffers);
           
-          // Clear error message since we successfully created it offline
           this.errorMessage = '';
           
-          // Force UI update
           console.log('Offline offer created:', newOffer);
           console.log('Current offers:', this.trainingOffers);
         }
       }
 
-      // Always reload to ensure consistency, but don't wait if offline
       if (this.isOnline) {
         await this.loadTrainingOffers();
-      } else {
-        // When offline, just ensure the list is updated
-        // The offer is already added above
       }
       
       this.isModalOpen = false;
@@ -918,7 +828,6 @@ export class Tab1Page implements OnInit, OnDestroy {
     this.editingOffer = offer;
     this.resetVoiceMemo();
     
-    // Parse description to remove voice memo URL for editing
     const parsedDescription = this.parseDescription(offer.description);
     
     this.offerForm.patchValue({
@@ -941,22 +850,19 @@ export class Tab1Page implements OnInit, OnDestroy {
         try {
           const { error } = await this.supabase.deleteTrainingOffer(offer.id);
           if (error) throw error;
-          this.setSuccessMessage('Trainingsangebot erfolgreich gelöscht');
+            this.setSuccessMessage('Trainingsangebot erfolgreich gelöscht');
           await this.loadTrainingOffers();
         } catch (error: any) {
-          // If online but failed, queue it
           if (!this.isOnline || error.message?.includes('network') || error.message?.includes('fetch')) {
             await this.queueService.addOperation({
               type: 'delete',
               entity: 'training_offer',
               data: { id: offer.id }
-            });
-            
-            // Remove from local display
+              });
+              
             this.trainingOffers = this.trainingOffers.filter(o => o.id !== offer.id);
             await this.storage.set('offline_training_offers', this.trainingOffers);
             
-            // If it's an offline-created offer, remove it from offline_created_offers too
             if (offer.id.startsWith('temp_')) {
               const offlineCreated = await this.storage.get<TrainingOffer[]>('offline_created_offers') || [];
               const updatedOfflineCreated = offlineCreated.filter(o => o.id !== offer.id);
@@ -966,21 +872,18 @@ export class Tab1Page implements OnInit, OnDestroy {
             this.setSuccessMessage('Löschung wird synchronisiert, sobald Sie online sind');
           } else {
             throw error;
+            }
           }
-        }
-      } else {
-        // Offline: queue the delete
-        await this.queueService.addOperation({
+        } else {
+          await this.queueService.addOperation({
           type: 'delete',
           entity: 'training_offer',
           data: { id: offer.id }
         });
         
-        // Remove from local display
         this.trainingOffers = this.trainingOffers.filter(o => o.id !== offer.id);
         await this.storage.set('offline_training_offers', this.trainingOffers);
         
-        // If it's an offline-created offer, remove it from offline_created_offers too
         if (offer.id.startsWith('temp_')) {
           const offlineCreated = await this.storage.get<TrainingOffer[]>('offline_created_offers') || [];
           const updatedOfflineCreated = offlineCreated.filter(o => o.id !== offer.id);
@@ -1017,7 +920,6 @@ export class Tab1Page implements OnInit, OnDestroy {
   }
 
   getProfileName(profile?: Profile, offerUserId?: string): string {
-    // If no profile provided, try to get current user's profile for their own offers
     if (!profile && offerUserId) {
       const currentUser = this.authService.getCurrentUser();
       if (currentUser?.id === offerUserId) {
@@ -1036,10 +938,7 @@ export class Tab1Page implements OnInit, OnDestroy {
     const lastName = profile.last_name || '';
     const name = `${firstName} ${lastName}`.trim();
     
-    // If profile exists but name is empty, try to fetch from database
     if (!name && profile.id) {
-      // Return a placeholder, but ideally we'd fetch it here
-      // For now, return 'Unbekannt' but log for debugging
       console.warn('Profile exists but name is empty:', profile.id);
       return 'Unbekannt';
     }
@@ -1081,18 +980,15 @@ export class Tab1Page implements OnInit, OnDestroy {
     this.isLoading = true;
     try {
       if (offer.is_participating) {
-        // Leave
         const { error } = await this.supabase.leaveTrainingOffer(offer.id, user.id);
         if (error) throw error;
         this.setSuccessMessage('Sie haben das Training verlassen');
       } else {
-        // Join
         const { error } = await this.supabase.joinTrainingOffer(offer.id, user.id);
         if (error) throw error;
         this.setSuccessMessage('Sie nehmen jetzt am Training teil');
       }
 
-      // Reload offers to get fresh data from server
       await this.loadTrainingOffers();
     } catch (error: any) {
       this.errorMessage = error.message || 'Fehler beim Aktualisieren der Teilnahme';
@@ -1116,7 +1012,6 @@ export class Tab1Page implements OnInit, OnDestroy {
 
       const { data, error } = await this.supabase.getTrainingOfferParticipants(offer.id, 10);
       if (error) throw error;
-      // Map data to Participant interface
       this.selectedOfferParticipants = (data || []).map((p: any) => ({
         id: p.id,
         training_offer_id: offer.id,
@@ -1149,9 +1044,7 @@ export class Tab1Page implements OnInit, OnDestroy {
   canRemoveParticipant(offer: TrainingOffer | null, participantUserId?: string): boolean {
     if (!offer) return false;
     const user = this.authService.getCurrentUser();
-    // Only owner can remove, but not themselves
     if (user?.id !== offer.user_id) return false;
-    // Don't allow removing yourself
     if (participantUserId && user.id === participantUserId) return false;
     return true;
   }
@@ -1159,7 +1052,6 @@ export class Tab1Page implements OnInit, OnDestroy {
   async removeParticipant(participant: Participant) {
     if (!this.selectedOffer) return;
 
-    // Prevent removing yourself
     const user = this.authService.getCurrentUser();
     if (user?.id === participant.user_id) {
       this.errorMessage = 'Sie können sich nicht selbst entfernen';
@@ -1188,10 +1080,8 @@ export class Tab1Page implements OnInit, OnDestroy {
         return;
       }
       
-      // Reload participants list to get fresh data from server
       await this.viewParticipants(this.selectedOffer);
       
-      // Reload training offers to update participant count
       await this.loadTrainingOffers();
       
       this.setSuccessMessage('Teilnehmer erfolgreich entfernt');
@@ -1207,7 +1097,6 @@ export class Tab1Page implements OnInit, OnDestroy {
     this.errorMessage = '';
     
     try {
-      // Request permissions
       const permissionStatus = await Geolocation.requestPermissions();
       if (permissionStatus.location !== 'granted') {
         this.errorMessage = 'Standortberechtigung wurde nicht erteilt. Bitte in den Einstellungen aktivieren.';
@@ -1215,7 +1104,6 @@ export class Tab1Page implements OnInit, OnDestroy {
         return;
       }
 
-      // Get current position
       const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: true,
         timeout: 10000
@@ -1224,15 +1112,12 @@ export class Tab1Page implements OnInit, OnDestroy {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
 
-      // Reverse geocode to get address
       const address = await this.reverseGeocode(lat, lng);
       
-      // Store coordinates and address
       this.selectedLatitude = lat;
       this.selectedLongitude = lng;
       this.selectedAddress = address;
       
-      // Open map modal for confirmation
       this.mapModalOpen = true;
     } catch (error: any) {
       console.error('Error getting location:', error);
@@ -1244,7 +1129,6 @@ export class Tab1Page implements OnInit, OnDestroy {
 
   async reverseGeocode(lat: number, lng: number): Promise<string> {
     try {
-      // Use OpenStreetMap Nominatim API (free, no API key required)
       const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
       
       const response = await fetch(url, {
@@ -1261,7 +1145,6 @@ export class Tab1Page implements OnInit, OnDestroy {
       
       if (data.address) {
         const addr = data.address;
-        // Build address string from components
         const parts: string[] = [];
         
         if (addr.road) parts.push(addr.road);
@@ -1275,11 +1158,9 @@ export class Tab1Page implements OnInit, OnDestroy {
         }
       }
       
-      // Fallback: return coordinates if address not found
       return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     } catch (error) {
       console.error('Reverse geocoding error:', error);
-      // Fallback: return coordinates
       return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
   }
@@ -1288,7 +1169,6 @@ export class Tab1Page implements OnInit, OnDestroy {
     if (this.selectedAddress) {
       this.offerForm.patchValue({ location: this.selectedAddress });
       this.mapModalOpen = false;
-      // Clear selected location data
       this.selectedLatitude = null;
       this.selectedLongitude = null;
       this.selectedAddress = '';
@@ -1297,7 +1177,6 @@ export class Tab1Page implements OnInit, OnDestroy {
 
   closeMapModal() {
     this.mapModalOpen = false;
-    // Clear selected location data
     this.selectedLatitude = null;
     this.selectedLongitude = null;
     this.selectedAddress = '';

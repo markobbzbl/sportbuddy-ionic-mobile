@@ -38,16 +38,12 @@ export class SplashPage implements OnInit {
   }
 
   async performChecks() {
-    // Check connectivity (runs in background)
     this.connectivityService.checkConnectivity();
     
-    // Initialize auth (this also checks session)
     await this.authService.initAuth();
     
-    // Wait a minimum time for smooth animation (at least 1.5 seconds)
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // Navigate to app
     this.navigateToApp();
   }
 
